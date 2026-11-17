@@ -1,0 +1,5 @@
+# Similar images (e.g. frames of the same video) are kept in the same subset, so that near-duplicates never
+# end up on both sides of the training/testing boundary. Pass this file to both biofouling split and biofouling train.
+
+[split]
+strategy = "grouped"

@@ -1,0 +1,26 @@
+# The network distinguishes the original annotation classes (Diploma Thesis).
+
+[[classes]]
+name = "Clean Hull"
+color = [0, 255, 0]
+annotations = ["Clean Hull"]
+
+[[classes]]
+name = "Slime/Algae"
+color = [255, 255, 106]
+annotations = ["Slime/Algae"]
+
+[[classes]]
+name = "Calcareous Deposits"
+color = [255, 87, 51]
+annotations = ["Calcareous Deposits"]
+
+[[classes]]
+name = "Barnacles/Molluscs"
+color = [157, 41, 177]
+annotations = ["Barnacles/Molluscs"]
+
+[[classes]]
+name = "Background/Other"
+color = [43, 138, 255]
+annotations = ["Background/Other"]

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.ruff_cache/
+
+# Environments
+.venv/
+.env
+
+# Windows application build output
+.vs/
+bin/
+obj/
+*.user
+
+# Data and outputs (MLflow and Optuna databases, run artifacts, predictions), which are not part of the repository
+/data/
+/outputs/
+*.onnx
+*.pt
