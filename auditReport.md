@@ -13,15 +13,15 @@ Status as of 18 November 2026, for `main` after the force-push of the re-authore
 | Project architecture and packaging | 82 | 85 | The Windows app builds; the export runs on the CPU |
 | Python code quality | 71 | 71 | Unchanged code; defensive code to remove (section 3) |
 | Reproducibility and experiment management | 72 | 74 | A changed configuration starts a new study instead of raising (O35, proposed) |
-| Tests, CI, documentation | 35 | 38 | Build workflow and README for the app |
+| Tests, CI, documentation | 35 | 35 | Unchanged |
 | Dataset curation | 65 | 62 | Video frames cannot be grouped, so the grouped split leaks (O29) |
 | Model design | 65 | 62 | Most attention coefficients start saturated (O40) |
 | Training and evaluation | 74 | 76 | GPU export fixed (O38) |
-| **Overall** | **68** | **70** | |
+| **Overall** | **68** | **69** | |
 
 **Resolved since the previous review, and removed:**
 - O38: the export always runs on the CPU (`a3dde03`).
-- O20, build part: the project file, the `Program.cs` entry point, streaming, vectorised processing, error log, final status, distinct output names, the build workflow and `Application/README.md` (`559815d`). The app built with no warnings or errors (.NET 10 SDK on Linux, targeting Windows). On test images, its preprocessed input and its masks were bit-identical to the Python pipeline. The window itself has not been run on Windows.
+- O20, build part: the project file, the `Program.cs` entry point, streaming, vectorised processing, error log, final status and distinct output names (`559815d`). The app built with no warnings or errors (.NET 10 SDK on Linux, targeting Windows). On test images, its preprocessed input and its masks were bit-identical to the Python pipeline. The window itself has not been run on Windows.
 
 **Dropped as unnecessary:**
 
@@ -149,6 +149,8 @@ Status as of 18 November 2026, for `main` after the force-push of the re-authore
 | ID | Issue | Fix |
 |---|---|---|
 | O20 | Masks are at model resolution, and there is no per-image summary | After D5: predict at native resolution (tiled), write masks at native resolution, and write `coverage.csv` (file and percentage of each class), the quantity a hull assessment uses |
+| O45 | **New.** Structure. One 300-line form class (`GUI.cs`) holds the UI, the validation, and the whole inference pipeline: model loading, metadata, preprocessing, inference, argmax, colouring and file input/output. The pipeline cannot be used or tested without the window; the parity test had to copy its methods. The status strip, progress bar, background colour and font are built in the constructor while the other controls are in `GUI.Designer.cs`, and the start button's colour is defined in both files. The type `GUI` and namespace `Production` do not describe the app, and the namespace differs from the project name | Two classes, one per file: `Segmenter.cs` (owns the session, input size and colour table; `Mat Predict(Mat image)`; `IDisposable`) and the form (`MainForm.cs` + `MainForm.Designer.cs`), which only lists files, reports progress and writes outputs. Move every control into the designer file. Namespace `BiofoulingSegmentation`, as the project. Do this before the native-resolution work (O20), which belongs in `Segmenter` |
+| O46 | **New.** `Application/` is the only capitalised top-level folder: the Python side follows lowercase names (`src`, `configs`, `data`, `outputs`), while .NET names project folders after the project in PascalCase | `application/`, for consistency with the rest of the repository. A case-only rename needs `git mv` on Windows |
 
 ---
 
@@ -227,6 +229,6 @@ Changes to results are made one at a time, against a recorded baseline.
 | 2. Data | A3, O29, O8 ⚠, O31, then `split` | Labels and split |
 | 3. Baseline | O40 ⚠, A4, A6, O16 with one seed per architecture, D2 seeds at the best rate, O18, O19, D7 | New baseline table |
 | 4. Improvements | D5 native crops, D4 colour, D3 regularisation, D8 if needed, D1 pretrained encoder, O12 | ⚠ each one |
-| 5. Application | O20 remainder, with D5 and O8 | No |
+| 5. Application | O45, O46, then the O20 remainder with D5 and O8 | No |
 
 **Settled:** package `src`, command `biofouling`, configuration in `configs/`, camelCase; 16 direct dependencies, 135 packages in `uv.lock`; attention gate of Oktay et al. (2018); squeeze-and-excitation channel attention; export on the CPU; Windows app on .NET 10 with ONNX Runtime 1.32 and OpenCvSharp 4.13.
