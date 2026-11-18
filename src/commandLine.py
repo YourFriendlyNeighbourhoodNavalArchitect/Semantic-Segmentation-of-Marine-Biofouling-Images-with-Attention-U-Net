@@ -58,7 +58,7 @@ def train(configuration: Configuration, arguments: Namespace) -> None:
     setExperiment(configuration)
     device = setupDevice()
     _, runID = trainModel(configuration, device, configuration.training.learningRate)
-    exportRun(runID, device)
+    exportRun(runID)
 
 def tune(configuration: Configuration, arguments: Namespace) -> None:
     from mlflow import MlflowClient
@@ -74,14 +74,13 @@ def tune(configuration: Configuration, arguments: Namespace) -> None:
     if 'model.onnx' in [artifact.path for artifact in MlflowClient().list_artifacts(bestRunID)]:
         logger.info(f'Model of run {bestRunID} has already been exported.')
     else:
-        exportRun(bestRunID, device)
+        exportRun(bestRunID)
 
 def export(configuration: Configuration, arguments: Namespace) -> None:
     from src.training.experimentTracking import startTracking
-    from src.training.trainingInitialization import setupDevice
     from src.training.exportONNX import exportRun
     startTracking(configuration)
-    exportRun(arguments.run, setupDevice())
+    exportRun(arguments.run)
 
 def test(configuration: Configuration, arguments: Namespace) -> None:
     from mlflow.artifacts import download_artifacts
