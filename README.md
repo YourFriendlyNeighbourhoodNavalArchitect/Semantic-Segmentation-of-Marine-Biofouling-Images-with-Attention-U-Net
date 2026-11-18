@@ -22,7 +22,7 @@ Each step is a subcommand of the `biofouling` command line, configured by `confi
 - `src/training/`: Training loop, loss, learning rate tuning, experiment tracking and export of the model.
 - `src/evaluation/`: Metrics, and evaluation of the exported model on the testing subset.
 - `src/visualization/`: Masks, training curves, dataset statistics and network summary.
-- `Application/`: Windows application, which applies an exported model to a folder of images.
+- `application/`: Windows application, which applies an exported model to a folder of images.
 - `.env.example`: Template of the Labelbox API key.
 
 ## References
