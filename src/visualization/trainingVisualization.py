@@ -1,21 +1,23 @@
+from logging import getLogger
+from math import log10, floor
+from pathlib import Path
+from typing import Any
 from matplotlib.pyplot import subplots, close
 from matplotlib.ticker import FuncFormatter
-from math import log10, floor
+from optuna import Study
 from optuna.visualization.matplotlib import plot_optimization_history, plot_slice
 
-def logResults(epoch, currentLR, trainingMetrics, validationMetrics):
-    # CMD outputs of key metrics to sanity-check training. Per-class metrics are stored, but not printed.
-    print(f'\nEpoch {epoch} results:')
-    print(f'Learning Rate = {currentLR:.6f}')
-    for title, metrics in [('Training Metrics:', trainingMetrics), ('Validation Metrics:', validationMetrics)]:
-        print(title)
-        for key, value in metrics.items():
-            if not isinstance(value, list):
-                print(f'{key}: {value:.4f}')
-    print('\n')
+logger = getLogger(__name__)
 
-def ticksFormat(x, pos):
-    # Dummy function to format y-axis ticks.
+def logResults(epoch: int, currentLR: float, trainingMetrics: dict[str, Any], validationMetrics: dict[str, Any]) -> None:
+    # Key metrics of every epoch, to sanity-check training. Per-class metrics are tracked, but not printed.
+    lines = [f'Epoch {epoch}, learning rate {currentLR:.3g}']
+    for title, metrics in [('Training', trainingMetrics), ('Validation', validationMetrics)]:
+        lines.append(f'{title:<12}' + ', '.join(f'{key} {value:.4f}' for key, value in metrics.items() if not isinstance(value, list)))
+    logger.info('\n'.join(lines))
+
+def ticksFormat(x: float, pos: int) -> str:
+    # Format y-axis ticks: large values in scientific notation, small values with up to three decimals.
     if abs(x) >= 1000:
         exponent = floor(log10(abs(x)))
         mantissa = x / (10**exponent)
@@ -24,7 +26,7 @@ def ticksFormat(x, pos):
     else:
         return f'{x:.3f}'.rstrip('0').rstrip('.')
 
-def plotMetrics(history, bestEpoch, path):
+def plotMetrics(history: dict[str, list[float]], bestEpoch: int, path: Path) -> Path:
     # Function to create and save plots after training ends.
     figure, axes = subplots(2, 2, figsize = (12, 12))
     figure.subplots_adjust(left = 0.075, right = 0.975, top = 0.925, bottom = 0.075, wspace = 0.15, hspace = 0.25)
@@ -51,7 +53,7 @@ def plotMetrics(history, bestEpoch, path):
     close(figure)
     return path
 
-def plotStudy(study, savePath, monitor):
+def plotStudy(study: Study, savePath: Path, monitor: str) -> None:
     # Monitored metric across trials, and against the learning rate of each trial.
     for name, plotFunction in [('Optimization History', plot_optimization_history), ('Learning Rate', plot_slice)]:
         axis = plotFunction(study, target_name = f'Validation {monitor}')

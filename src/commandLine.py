@@ -1,11 +1,29 @@
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
+from logging import Formatter, LogRecord, StreamHandler, getLogger, INFO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from src.configuration import PROJECT_ROOT, loadConfiguration
+from src.configuration import PROJECT_ROOT, Configuration, loadConfiguration
 
 # Modules are imported within each command, so that light commands do not load PyTorch or MLflow.
 
-def convertLabels(configuration, arguments):
+logger = getLogger(__name__)
+
+class ConsoleFormatter(Formatter):
+    # Information is printed as is; warnings and errors are prefixed with their level.
+    def format(self, record: LogRecord) -> str:
+        message = super().format(record)
+        return message if record.levelno <= INFO else f'{record.levelname.capitalize()}: {message}'
+
+def configureLogging() -> None:
+    # Only the messages of the project are shown. Libraries keep their own settings, and report warnings only.
+    handler = StreamHandler()
+    handler.setFormatter(ConsoleFormatter('%(message)s'))
+    projectLogger = getLogger('src')
+    projectLogger.addHandler(handler)
+    projectLogger.setLevel(INFO)
+    projectLogger.propagate = False
+
+def convertLabels(configuration: Configuration, arguments: Namespace) -> None:
     from os import getenv
     from dotenv import load_dotenv
     from src.data.Labelbox import Labelbox
@@ -13,25 +31,25 @@ def convertLabels(configuration, arguments):
     load_dotenv(PROJECT_ROOT / '.env')
     Labelbox(configuration.paths.labels, configuration.paths.masks, configuration.paths.metadata, getenv('LABELBOX_API_KEY')).saveMasks()
 
-def extractFrames(configuration, arguments):
+def extractFrames(configuration: Configuration, arguments: Namespace) -> None:
     from src.data.videoToFrames import videoToFrames
-    videoToFrames(arguments.video, arguments.output or configuration.paths.videos, arguments.frameRate)
+    videoToFrames(arguments.video, arguments.output or configuration.paths.videos, arguments.interval)
 
-def splitDataset(configuration, arguments):
+def splitDataset(configuration: Configuration, arguments: Namespace) -> None:
     from src.data.SubsetSplit import SubsetSplit
     SubsetSplit(configuration.paths.metadata, configuration.splitPath, configuration.split.strategy, configuration.split.ratios,
                 configuration.seed).splitDataset()
 
-def viewDataset(configuration, arguments):
+def viewDataset(configuration: Configuration, arguments: Namespace) -> None:
     from src.visualization.DatasetVisualizer import DatasetVisualizer
-    DatasetVisualizer(configuration)
+    DatasetVisualizer(configuration).run()
 
-def plotGraphs(configuration, arguments):
+def plotGraphs(configuration: Configuration, arguments: Namespace) -> None:
     from src.visualization.PublicationGraphs import PublicationGraphs
     PublicationGraphs(configuration.paths.metadata, configuration.paths.visualizations, configuration.classDictionaries,
                       configuration.classRemap).generateGraphs()
 
-def train(configuration, arguments):
+def train(configuration: Configuration, arguments: Namespace) -> None:
     from src.training.experimentTracking import startTracking, setExperiment
     from src.training.trainingInitialization import setupDevice
     from src.training.trainModel import trainModel
@@ -42,7 +60,7 @@ def train(configuration, arguments):
     _, runID = trainModel(configuration, device, configuration.training.learningRate)
     exportRun(runID, device)
 
-def tune(configuration, arguments):
+def tune(configuration: Configuration, arguments: Namespace) -> None:
     from mlflow import MlflowClient
     from src.training.experimentTracking import startTracking, setExperiment
     from src.training.trainingInitialization import setupDevice
@@ -54,18 +72,18 @@ def tune(configuration, arguments):
     # Only the best trial is exported, unless a previous session already did so.
     bestRunID = tuneModel(configuration, device)
     if 'model.onnx' in [artifact.path for artifact in MlflowClient().list_artifacts(bestRunID)]:
-        print(f'Model of run {bestRunID} has already been exported.')
+        logger.info(f'Model of run {bestRunID} has already been exported.')
     else:
         exportRun(bestRunID, device)
 
-def export(configuration, arguments):
+def export(configuration: Configuration, arguments: Namespace) -> None:
     from src.training.experimentTracking import startTracking
     from src.training.trainingInitialization import setupDevice
     from src.training.exportONNX import exportRun
     startTracking(configuration)
     exportRun(arguments.run, setupDevice())
 
-def test(configuration, arguments):
+def test(configuration: Configuration, arguments: Namespace) -> None:
     from mlflow.artifacts import download_artifacts
     from src.training.experimentTracking import startTracking, logTestResults
     from src.evaluation.ModelTester import ModelTester
@@ -78,11 +96,11 @@ def test(configuration, arguments):
     if tester.runID is not None:
         logTestResults(tester.runID, metrics, tester.classNames, summaryPaths)
 
-def summarizeModel(configuration, arguments):
+def summarizeModel(configuration: Configuration, arguments: Namespace) -> None:
     from src.visualization.visualizeModel import visualizeModel
-    visualizeModel(configuration.model.architecture, configuration.numClasses, configuration.model.resolution, configuration.paths.visualizations)
+    visualizeModel(configuration.model.architecture, configuration.numClasses, configuration.model.resolution)
 
-def main():
+def main() -> None:
     common = ArgumentParser(add_help = False)
     common.add_argument('--config', action = 'append', type = Path, default = [], metavar = 'FILE',
                         help = 'Configuration file layered over configs/default.toml. Repeatable; later files take precedence.')
@@ -92,7 +110,7 @@ def main():
     commands.add_parser('labels', parents = [common], help = 'Convert the Labelbox export into masks and metadata.').set_defaults(function = convertLabels)
     frames = commands.add_parser('frames', parents = [common], help = 'Extract frames from a video.')
     frames.add_argument('video', type = Path)
-    frames.add_argument('--frameRate', type = float, default = 0.5, help = 'Seconds between saved frames (default: 0.5).')
+    frames.add_argument('--interval', type = float, default = 0.5, metavar = 'SECONDS', help = 'Time between saved frames (default: 0.5).')
     frames.add_argument('--output', type = Path, help = 'Folder of the frames (default: the videos folder of the data).')
     frames.set_defaults(function = extractFrames)
     commands.add_parser('split', parents = [common], help = 'Split the dataset into training, validation and testing subsets.').set_defaults(function = splitDataset)
@@ -109,7 +127,8 @@ def main():
     source.add_argument('--model', type = Path, help = 'ONNX model file.')
     testParser.add_argument('--figures', action = 'store_true', help = 'Also save a comparison figure for every image.')
     testParser.set_defaults(function = test)
-    commands.add_parser('summary', parents = [common], help = 'Print the network summary and render its graph.').set_defaults(function = summarizeModel)
+    commands.add_parser('summary', parents = [common], help = 'Print the network summary.').set_defaults(function = summarizeModel)
 
     arguments = parser.parse_args()
+    configureLogging()
     arguments.function(loadConfiguration(arguments.config), arguments)

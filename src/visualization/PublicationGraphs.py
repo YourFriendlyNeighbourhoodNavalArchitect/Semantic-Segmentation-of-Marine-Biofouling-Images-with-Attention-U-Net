@@ -1,11 +1,17 @@
+import json
 import numpy as np
-from json import load
-from matplotlib.pyplot import subplots, savefig, close
-from matplotlib.colors import Normalize
+from collections.abc import Sequence
+from logging import getLogger
+from pathlib import Path
 from textwrap import TextWrapper
+from typing import Any
+from matplotlib.pyplot import subplots, close
+from matplotlib.colors import Normalize
+
+logger = getLogger(__name__)
 
 class PublicationGraphs:
-    def __init__(self, metadataPath, outputDirectory, classes, classRemap):
+    def __init__(self, metadataPath: Path, outputDirectory: Path, classes: Sequence[dict[str, Any]], classRemap: Sequence[int]):
         # Classes are given as dictionaries with "name" and "color", in the order of their indices.
         self.metadataPath = metadataPath
         self.outputDirectory = outputDirectory
@@ -20,11 +26,11 @@ class PublicationGraphs:
         self.correlationMatrix = np.zeros((self.numClasses, self.numClasses), dtype = float)
         self.uniqueClassesCount = np.zeros(self.totalImages, dtype = int)
 
-    def loadMetadata(self):
-        with open(self.metadataPath, 'r') as f:
-            return load(f)
+    def loadMetadata(self) -> dict[str, Any]:
+        with open(self.metadataPath, 'r', encoding = 'utf-8') as file:
+            return json.load(file)
 
-    def analyzeMetadata(self):
+    def analyzeMetadata(self) -> None:
         # Metadata holds annotation classes, which are mapped to the classes of the model.
         for ID, data in enumerate(self.metadata.values()):
             uniqueClasses = np.array(sorted({self.classRemap[index] for index in data['uniqueClassIndices']}), dtype = int)
@@ -39,7 +45,7 @@ class PublicationGraphs:
         self.correlationMatrix = np.divide(self.correlationMatrix, rowSums,
                                            out = np.zeros_like(self.correlationMatrix), where = rowSums > 0)
 
-    def plotBarChart(self, labels, counts, colors, title):
+    def plotBarChart(self, labels: Sequence[Any], counts: Sequence[int], colors: Any, title: str) -> None:
         # Bar chart of image counts, annotated with raw counts and percentages above the bars.
         percentages = np.array(counts) / self.totalImages * 100
         figure, axes = subplots(figsize = (10, 6))
@@ -54,10 +60,10 @@ class PublicationGraphs:
             axes.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{count} ({percentage:.1f}%)',
                       ha = 'center', va = 'bottom', fontsize = 10, color = 'black')
         figure.tight_layout()
-        savefig(self.outputDirectory / f'{title}.pdf', dpi = 600, format = 'pdf')
+        figure.savefig(self.outputDirectory / f'{title}.pdf', format = 'pdf')
         close(figure)
 
-    def plotClassOccurrences(self):
+    def plotClassOccurrences(self) -> None:
         # Sort classes by occurrence frequency, in descending order.
         sortedOccurrences = sorted(enumerate(self.classOccurrences), key = lambda x: x[1], reverse = True)
         classIndices, occurrenceCounts = zip(*sortedOccurrences)
@@ -66,7 +72,7 @@ class PublicationGraphs:
         colors = [tuple(i / 255 for i in self.classes[index]['color']) for index in classIndices]
         self.plotBarChart(classLabels, occurrenceCounts, colors, 'Class Occurrence Frequency')
 
-    def plotClassCorrelation(self):
+    def plotClassCorrelation(self) -> None:
         # Plot heatmap using precomputed normalized correlation matrix.
         classLabels = ['\n'.join(self.wrapper.wrap(self.classNames[index])) for index in range(self.numClasses)]
         figure, axes = subplots(figsize = (14, 12))
@@ -84,17 +90,18 @@ class PublicationGraphs:
         axes.tick_params(axis = 'x', labelsize = 12)
         axes.tick_params(axis = 'y', labelsize = 12)
         figure.tight_layout()
-        savefig(self.outputDirectory / 'Class Correlation Matrix.pdf', dpi = 600, format = 'pdf')
+        figure.savefig(self.outputDirectory / 'Class Correlation Matrix.pdf', format = 'pdf')
         close(figure)
 
-    def plotUniqueClassesPerImage(self):
+    def plotUniqueClassesPerImage(self) -> None:
         # Count images by number of unique classes per image.
         uniqueCountDistribution = np.bincount(self.uniqueClassesCount, minlength = self.numClasses + 1)[1:]
         self.plotBarChart(range(1, self.numClasses + 1), uniqueCountDistribution, 'skyblue', 'Count of Unique Classes per Image')
 
-    def generateGraphs(self):
+    def generateGraphs(self) -> None:
         self.outputDirectory.mkdir(parents = True, exist_ok = True)
         self.analyzeMetadata()
         self.plotClassOccurrences()
         self.plotClassCorrelation()
         self.plotUniqueClassesPerImage()
+        logger.info(f'Dataset statistics of {self.totalImages} images saved to {self.outputDirectory}.')

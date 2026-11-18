@@ -1,8 +1,11 @@
+from collections.abc import Sequence
+from typing import Any
+
 # Images are annotated in Labelbox with the classes below. Stored masks hold the position of each class in this tuple,
 # so the order must never change.
 ANNOTATION_CLASSES = ('Clean Hull', 'Slime/Algae', 'Calcareous Deposits', 'Barnacles/Molluscs', 'Background/Other')
 
-def classRemap(classes):
+def classRemap(classes: Sequence[dict[str, Any]]) -> tuple[int, ...]:
     # Lookup table from annotation index to model index, for classes given as dictionaries with "name" and "annotations".
     remap = [None] * len(ANNOTATION_CLASSES)
     for modelIndex, modelClass in enumerate(classes):

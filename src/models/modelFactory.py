@@ -1,15 +1,16 @@
-from torch.nn import Conv2d, BatchNorm2d
+from torch.nn import Module, Conv2d, BatchNorm2d
 from torch.nn.init import kaiming_normal_, constant_
 from src.models.UNet import UNet
 from src.models.SimpleCNN import SimpleCNN
 
-# Attention mechanisms can be removed one at a time, to evaluate their contribution.
+# Attention mechanisms can be removed one at a time, to evaluate their contribution. Downsampling factors of the same
+# architectures are listed in architectures.py.
 ARCHITECTURES = {'Attention U-Net': lambda inChannels, numClasses: UNet(inChannels, numClasses, spatialAttention = True, channelAttention = True),
                  'Spatial Attention U-Net': lambda inChannels, numClasses: UNet(inChannels, numClasses, spatialAttention = True, channelAttention = False),
                  'U-Net': lambda inChannels, numClasses: UNet(inChannels, numClasses, spatialAttention = False, channelAttention = False),
                  'Simple CNN': lambda inChannels, numClasses: SimpleCNN(inChannels, numClasses)}
 
-def initializeWeights(module):
+def initializeWeights(module: Module) -> None:
     # Weight initialization in neural networks improves performance and stability.
     # Refer to [https://arxiv.org/pdf/2406.00348v1].
     if isinstance(module, Conv2d):
@@ -23,7 +24,7 @@ def initializeWeights(module):
         constant_(module.weight, 1)
         constant_(module.bias, 0)
 
-def initializeModel(architecture, numClasses, device, inChannels = 3):
+def initializeModel(architecture: str, numClasses: int, device: str, inChannels: int = 3) -> Module:
     if architecture not in ARCHITECTURES:
         raise ValueError(f'Unknown architecture "{architecture}". Available: {", ".join(ARCHITECTURES)}.')
     model = ARCHITECTURES[architecture](inChannels, numClasses)

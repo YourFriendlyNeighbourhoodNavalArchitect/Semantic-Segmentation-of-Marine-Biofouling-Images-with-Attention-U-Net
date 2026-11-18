@@ -1,11 +1,14 @@
 import numpy as np
 import albumentations as A
-from torch import from_numpy, float32
+from collections.abc import Iterable, Sequence
+from pathlib import Path
+from torch import Tensor, from_numpy, float32
 from PIL import Image
 from torch.utils.data import Dataset
 
 class SegmentationDataset(Dataset):
-    def __init__(self, imageFolder, maskFolder, IDs, resolution, classRemap, augmentationFlag, seed):
+    def __init__(self, imageFolder: Path, maskFolder: Path, IDs: Iterable[str], resolution: Sequence[int], classRemap: Sequence[int],
+                 augmentationFlag: bool, seed: int):
         self.IDs = list(IDs)
         self.augmentationFlag = augmentationFlag
 
@@ -34,10 +37,10 @@ class SegmentationDataset(Dataset):
         else:
             self.transformCompose = A.Compose([A.Resize(resolution[0], resolution[1])], seed = seed)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.dataset)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> tuple[Tensor, Tensor]:
         # Getter ensures masks are in the correct form.
         imagePath, maskPath = self.dataset[index]
         image = np.array(Image.open(imagePath).convert('RGB'))

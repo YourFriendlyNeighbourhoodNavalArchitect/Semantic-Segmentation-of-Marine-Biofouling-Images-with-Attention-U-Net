@@ -1,12 +1,24 @@
+from collections.abc import Callable
 from copy import deepcopy
+from logging import getLogger
+from typing import Any
 from tqdm import tqdm
 from torch import no_grad, autocast
 from torch.amp import GradScaler
+from torch.nn import Module
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
+from torch.utils.data import DataLoader
+from optuna import Trial
 from optuna.exceptions import TrialPruned
-from src.training.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
+from src.configuration import Training
+from src.evaluation.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
 from src.visualization.trainingVisualization import logResults
 
-def trainOneEpoch(model, trainingDataloader, optimizer, scaler, criterion, numClasses, device):
+logger = getLogger(__name__)
+
+def trainOneEpoch(model: Module, trainingDataloader: DataLoader, optimizer: Optimizer, scaler: GradScaler, criterion: Module,
+                  numClasses: int, device: str) -> dict[str, Any]:
     model.train()
     totalLoss = 0.0
     confusionMatrix = initializeConfusionMatrix(numClasses, device)
@@ -33,7 +45,7 @@ def trainOneEpoch(model, trainingDataloader, optimizer, scaler, criterion, numCl
     metrics.update(computeMetrics(confusionMatrix))
     return metrics
 
-def validateOneEpoch(model, validationDataloader, criterion, numClasses, device):
+def validateOneEpoch(model: Module, validationDataloader: DataLoader, criterion: Module, numClasses: int, device: str) -> dict[str, Any]:
     model.eval()
     totalLoss = 0.0
     confusionMatrix = initializeConfusionMatrix(numClasses, device)
@@ -53,8 +65,10 @@ def validateOneEpoch(model, validationDataloader, criterion, numClasses, device)
     metrics.update(computeMetrics(confusionMatrix))
     return metrics
 
-def trainingLoop(model, trainingDataloader, validationDataloader, optimizer, warmupScheduler, mainScheduler, criterion, numClasses,
-                 device, training, onEpoch, trial = None):
+def trainingLoop(model: Module, trainingDataloader: DataLoader, validationDataloader: DataLoader, optimizer: Optimizer,
+                 warmupScheduler: LambdaLR, mainScheduler: ReduceLROnPlateau, criterion: Module, numClasses: int, device: str,
+                 training: Training, onEpoch: Callable[..., None],
+                 trial: Trial | None = None) -> tuple[dict[str, Any], dict[str, Any], int, dict[str, list[float]]]:
     # The training section of the configuration holds the stopping and monitoring settings.
     # onEpoch receives the metrics of every epoch, for logging.
     scaler = GradScaler(device, enabled = device == 'cuda')
@@ -67,7 +81,7 @@ def trainingLoop(model, trainingDataloader, validationDataloader, optimizer, war
     patienceCounter = 0
     epoch = 0
 
-    def isImprovement(value):
+    def isImprovement(value: float) -> bool:
         return value > bestValue if training.monitorMode == 'max' else value < bestValue
 
     while epoch < training.maxEpochs:
@@ -104,11 +118,11 @@ def trainingLoop(model, trainingDataloader, validationDataloader, optimizer, war
         else:
             patienceCounter += 1
         if patienceCounter >= training.patience:
-            print(f'Early stopping triggered after {epoch} epochs.')
+            logger.info(f'Early stopping triggered after {epoch} epochs.')
             break
 
     # Restore the weights of the best epoch, rather than those of the last epoch.
     model.load_state_dict(bestState)
-    print(f'Best {monitor} of {bestValue:.4f} reached at epoch {bestEpoch}.')
+    logger.info(f'Best {monitor} of {bestValue:.4f} reached at epoch {bestEpoch}.')
     trainingMetrics, validationMetrics = bestMetrics
     return trainingMetrics, validationMetrics, bestEpoch, history

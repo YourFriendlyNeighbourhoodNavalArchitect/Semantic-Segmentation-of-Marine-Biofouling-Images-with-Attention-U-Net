@@ -1,10 +1,10 @@
-from torch import argmax, bincount, zeros, int64
+from torch import Tensor, argmax, bincount, zeros, int64
 
-def initializeConfusionMatrix(numClasses, device = 'cpu'):
+def initializeConfusionMatrix(numClasses: int, device: str = 'cpu') -> Tensor:
     # Rows hold the ground truth classes, columns hold the predicted classes.
     return zeros((numClasses, numClasses), dtype = int64, device = device)
 
-def updateConfusionMatrix(confusionMatrix, prediction, groundTruth):
+def updateConfusionMatrix(confusionMatrix: Tensor, prediction: Tensor, groundTruth: Tensor) -> Tensor:
     # Pixels are accumulated over the entire subset, so that metrics are not biased by the composition of each batch.
     # Logits of shape (B, C, H, W) are converted to class indices of shape (B, H, W).
     numClasses = confusionMatrix.shape[0]
@@ -14,17 +14,25 @@ def updateConfusionMatrix(confusionMatrix, prediction, groundTruth):
     confusionMatrix += bincount(indices, minlength = numClasses ** 2).reshape(numClasses, numClasses)
     return confusionMatrix
 
-def computeMetrics(confusionMatrix):
+def computeMetrics(confusionMatrix: Tensor) -> dict[str, float | list[float | None]]:
     # Per-class metrics are derived from the confusion matrix, and averaged over the classes (macro average).
+    # Pixel accuracy is the fraction of correctly classified pixels, over all classes at once.
     confusionMatrix = confusionMatrix.double().cpu()
     TP = confusionMatrix.diag()
     FP = confusionMatrix.sum(dim = 0) - TP
     FN = confusionMatrix.sum(dim = 1) - TP
-    # Classes absent from both the prediction and the ground truth are excluded from the averages.
+    # Classes absent from both the prediction and the ground truth have no defined metrics. They are excluded from the
+    # averages, and reported as None.
     presentClasses = (TP + FP + FN) > 0
 
-    def safeDivide(numerator, denominator):
+    def safeDivide(numerator: Tensor, denominator: Tensor) -> Tensor:
         return (numerator / denominator.clamp(min = 1)).where(denominator > 0, numerator.new_zeros(()))
+
+    def macroAverage(perClass: Tensor) -> float:
+        return perClass[presentClasses].mean().item() if presentClasses.any() else 0.0
+
+    def perClassValues(perClass: Tensor) -> list[float | None]:
+        return [value if present else None for value, present in zip(perClass.tolist(), presentClasses.tolist())]
 
     perClassDice = safeDivide(2 * TP, 2 * TP + FP + FN)
     perClassIoU = safeDivide(TP, TP + FP + FN)
@@ -32,11 +40,7 @@ def computeMetrics(confusionMatrix):
     perClassRecall = safeDivide(TP, TP + FN)
     pixelAccuracy = (TP.sum() / confusionMatrix.sum().clamp(min = 1)).item()
 
-    def macroAverage(perClass):
-        return perClass[presentClasses].mean().item() if presentClasses.any() else 0.0
-
-    # Return floating point values to facilitate further manipulation.
-    return {'Dice Coefficient': macroAverage(perClassDice), 'IoU': macroAverage(perClassIoU), 'Accuracy': pixelAccuracy,
+    return {'Dice Coefficient': macroAverage(perClassDice), 'IoU': macroAverage(perClassIoU), 'Pixel Accuracy': pixelAccuracy,
             'Precision': macroAverage(perClassPrecision), 'Recall': macroAverage(perClassRecall),
-            'Per Class Dice': perClassDice.tolist(), 'Per Class IoU': perClassIoU.tolist(),
-            'Per Class Precision': perClassPrecision.tolist(), 'Per Class Recall': perClassRecall.tolist()}
+            'Per Class Dice': perClassValues(perClassDice), 'Per Class IoU': perClassValues(perClassIoU),
+            'Per Class Precision': perClassValues(perClassPrecision), 'Per Class Recall': perClassValues(perClassRecall)}

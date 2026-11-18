@@ -1,15 +1,16 @@
+from torch import Tensor
 from torch.nn import Module, CrossEntropyLoss
 from torch.nn.functional import softmax, one_hot
 
 class LossFunction(Module):
     # Composite loss function suggested in the relevant literature [https://doi.org/10.1080/08927014.2023.2185143].
-    def __init__(self, numClasses, alpha = 0.5):
+    def __init__(self, numClasses: int, alpha: float = 0.5):
         super().__init__()
         self.numClasses = numClasses
         self.alpha = alpha
         self.crossEntropyLoss = CrossEntropyLoss()
 
-    def diceLoss(self, prediction, groundTruth):
+    def diceLoss(self, prediction: Tensor, groundTruth: Tensor) -> Tensor:
         # Soft Dice loss, computed on class probabilities so that it remains differentiable.
         # The argmax of the prediction would block the gradient, reducing the loss to cross-entropy alone.
         groundTruth = one_hot(groundTruth, self.numClasses).permute(0, 3, 1, 2).float()
@@ -21,7 +22,7 @@ class LossFunction(Module):
         diceScores = (2. * intersection + 1e-6) / (union + 1e-6)
         return 1 - diceScores.mean()
 
-    def forward(self, prediction, groundTruth):
+    def forward(self, prediction: Tensor, groundTruth: Tensor) -> Tensor:
         crossEntropyLoss = self.crossEntropyLoss(prediction, groundTruth)
         diceLoss = self.diceLoss(prediction, groundTruth)
         return self.alpha * crossEntropyLoss + (1 - self.alpha) * diceLoss

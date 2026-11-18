@@ -1,23 +1,31 @@
+import json
 import numpy as np
-from json import dump, loads
+from logging import getLogger
 from pathlib import Path
+from typing import Any
 from PIL import Image
 from tqdm import tqdm
-from torch import from_numpy
+from torch import Tensor, from_numpy
 from torch.utils.data import DataLoader
 from matplotlib.pyplot import subplots, close
 from onnxruntime import InferenceSession
 from src.annotationClasses import classRemap
+from src.configuration import Configuration
 from src.data.SegmentationDataset import SegmentationDataset
 from src.data.SubsetSplit import loadSplit
-from src.training.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
+from src.evaluation.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
 from src.visualization.maskVisualization import calculateClassCoverage, classIndicesToRGB, generateLegend
+
+logger = getLogger(__name__)
 
 # Images per inference call. Batching helps the CPU modestly, without the memory demands of larger batches.
 BATCH_SIZE = 4
+# Metrics averaged over the classes, and the columns of the LaTeX table row, in the order of the publication.
+MACRO_METRICS = ('Dice Coefficient', 'IoU', 'Precision', 'Recall')
+TABLE_METRICS = ('Dice Coefficient', 'IoU', 'Pixel Accuracy', 'Precision', 'Recall')
 
 class ModelTester:
-    def __init__(self, modelPath, configuration, saveFigures = False):
+    def __init__(self, modelPath: str, configuration: Configuration, saveFigures: bool = False):
         # The exported model runs on CPU, as in the Windows application, so that reported metrics match the deployed numerics.
         self.session = InferenceSession(modelPath, providers = ['CPUExecutionProvider'])
         self.inputName = self.session.get_inputs()[0].name
@@ -25,7 +33,7 @@ class ModelTester:
         metadata = self.session.get_modelmeta().custom_metadata_map
         if 'classes' not in metadata:
             raise ValueError(f'{modelPath} carries no class metadata. Export it again with "biofouling export".')
-        self.classes = loads(metadata['classes'])
+        self.classes = json.loads(metadata['classes'])
         self.classNames = [modelClass['name'] for modelClass in self.classes]
         self.numClasses = len(self.classes)
         self.architecture = metadata['architecture']
@@ -36,7 +44,7 @@ class ModelTester:
         self.dataset = self.loadDataset(configuration, metadata)
         self.loader = DataLoader(self.dataset, batch_size = BATCH_SIZE, shuffle = False, num_workers = configuration.training.numWorkers)
 
-    def loadDataset(self, configuration, metadata):
+    def loadDataset(self, configuration: Configuration, metadata: dict[str, str]) -> SegmentationDataset:
         # The testing subset is that of the split the model was trained on. A split generated afterwards may place
         # training images in the testing subset, so it is refused.
         splitPath = configuration.paths.splits / f'{metadata["splitStrategy"]}.json'
@@ -44,17 +52,17 @@ class ModelTester:
         if splitHash != metadata['splitHash']:
             raise ValueError(f'{splitPath} has been generated again since the model was trained, so its testing subset '
                              f'may contain training images of the model.')
-        dataset = SegmentationDataset(configuration.paths.images, configuration.paths.masks, split['testing'], loads(metadata['resolution']),
+        dataset = SegmentationDataset(configuration.paths.images, configuration.paths.masks, split['testing'], json.loads(metadata['resolution']),
                                       classRemap(self.classes), augmentationFlag = False, seed = configuration.seed)
-        print(f'Total number of samples in the dataset: {len(dataset)}')
+        logger.info(f'{len(dataset)} images in the testing subset.')
         return dataset
 
-    def predict(self, images):
+    def predict(self, images: Tensor) -> np.ndarray:
         # Run the exported model on a batch of images, and convert logits to class indices.
         output = self.session.run(None, {self.inputName: images.numpy()})[0]
         return np.argmax(output, axis = 1).astype(np.uint8)
 
-    def plotResults(self, image, prediction, groundTruth, ID, diceScore):
+    def plotResults(self, image: Tensor, prediction: np.ndarray, groundTruth: np.ndarray, ID: str, diceScore: float) -> None:
         # Plot the image, predicted mask, and ground truth mask.
         figure, axes = subplots(1, 3, figsize = (24, 8))
         figure.subplots_adjust(left = 0.025, right = 0.975, top = 0.95, bottom = 0.025, wspace = 0.025)
@@ -73,7 +81,7 @@ class ModelTester:
         figure.savefig(self.outputDirectory / 'Figures' / f'{ID}.png', dpi = 150, bbox_inches = 'tight')
         close(figure)
 
-    def plotBestWorst(self, imageScores, predictions, numImages = 3):
+    def plotBestWorst(self, imageScores: list[tuple[str, float]], predictions: dict[str, np.ndarray], numImages: int = 3) -> list[Path]:
         # Combined figure of the best and worst predictions, ranked by Dice coefficient.
         # Predictions are reused, rather than computed again.
         imageScores = sorted(imageScores, key = lambda x: x[1], reverse = True)
@@ -100,7 +108,7 @@ class ModelTester:
         close(figure)
         return paths
 
-    def plotConfusionMatrix(self, confusionMatrix):
+    def plotConfusionMatrix(self, confusionMatrix: Tensor) -> list[Path]:
         # Confusion matrix normalized by row, i.e. the fraction of each true class assigned to each predicted class.
         confusionMatrix = confusionMatrix.double().cpu().numpy()
         confusionMatrix = confusionMatrix / np.maximum(confusionMatrix.sum(axis = 1, keepdims = True), 1)
@@ -123,19 +131,20 @@ class ModelTester:
         close(figure)
         return paths
 
-    def printResults(self, metrics):
-        # Macro-averaged and per-class metrics, followed by a LaTeX table row of the macro-averaged metrics.
-        scalarKeys = [key for key, value in metrics.items() if not isinstance(value, list)]
-        print('\nMacro-averaged metrics:')
-        print('\n'.join(f'{key:<20}{metrics[key]:.4f}' for key in scalarKeys))
-        print('\nPer-class metrics:')
-        print(f'{"":<20}' + ''.join(f'{className:>20}' for className in self.classNames))
+    def printResults(self, metrics: dict[str, Any]) -> None:
+        # Pixel accuracy, macro-averaged and per-class metrics, followed by a LaTeX table row.
+        # Classes absent from both the prediction and the ground truth have no defined metrics, and are shown as n/a.
+        lines = [f'{"Pixel Accuracy":<20}{metrics["Pixel Accuracy"]:.4f}', '', 'Macro-averaged over the classes present:']
+        lines += [f'{key:<20}{metrics[key]:.4f}' for key in MACRO_METRICS]
+        lines += ['', 'Per class:', f'{"":<20}' + ''.join(f'{className:>20}' for className in self.classNames)]
         for key in [key for key, value in metrics.items() if isinstance(value, list)]:
-            print(f'{key.replace("Per Class ", ""):<20}' + ''.join(f'{value:>20.4f}' for value in metrics[key]))
-        print('\nLaTeX table row (' + ', '.join(scalarKeys) + '):')
-        print(f'{self.architecture} & ' + ' & '.join(f'{metrics[key]:.4f}' for key in scalarKeys) + r' \\')
+            lines.append(f'{key.removeprefix("Per Class "):<20}' + ''.join(f'{"n/a":>20}' if value is None else f'{value:>20.4f}'
+                                                                           for value in metrics[key]))
+        lines += ['', 'LaTeX table row (' + ', '.join(TABLE_METRICS) + '):',
+                  f'{self.architecture} & ' + ' & '.join(f'{metrics[key]:.4f}' for key in TABLE_METRICS) + r' \\']
+        logger.info('\n'.join(lines))
 
-    def runInference(self):
+    def runInference(self) -> tuple[dict[str, Any], list[Path]]:
         # Run the model on the testing subset. Metrics are accumulated over all pixels of the subset.
         # Every image is predicted once; its confusion matrix yields both its own Dice coefficient and the subset totals.
         for folder in ['Masks'] + (['Figures'] if self.saveFigures else []):
@@ -160,11 +169,11 @@ class ModelTester:
         metrics = computeMetrics(confusionMatrix)
         self.printResults(metrics)
         resultsPath = self.outputDirectory / 'testResults.json'
-        with open(resultsPath, 'w') as f:
-            dump({'classes': self.classNames, 'metrics': metrics, 'confusionMatrix': confusionMatrix.tolist(),
-                  'imageDiceCoefficients': dict(imageScores)}, f, indent = 4)
+        with open(resultsPath, 'w', encoding = 'utf-8') as file:
+            json.dump({'classes': self.classNames, 'metrics': metrics, 'confusionMatrix': confusionMatrix.tolist(),
+                       'imageDiceCoefficients': dict(imageScores)}, file, indent = 4)
         summaryPaths = [resultsPath, *self.plotConfusionMatrix(confusionMatrix)]
         if len(imageScores) >= 2:
             summaryPaths += self.plotBestWorst(imageScores, predictions, numImages = min(3, len(imageScores) // 2))
-        print(f'Predictions saved to {self.outputDirectory}.')
+        logger.info(f'Predictions saved to {self.outputDirectory}.')
         return metrics, summaryPaths

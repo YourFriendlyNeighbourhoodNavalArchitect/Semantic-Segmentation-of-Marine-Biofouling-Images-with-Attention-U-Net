@@ -1,8 +1,12 @@
 import mlflow
+from logging import getLogger
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 from torch.cuda import max_memory_allocated
+from optuna import Trial
 from optuna.exceptions import TrialPruned
+from src.configuration import Configuration
 from src.data.SubsetSplit import loadSplit
 from src.models.modelFactory import initializeModel
 from src.training.LossFunction import LossFunction
@@ -12,7 +16,9 @@ from src.training.checkpoints import saveCheckpoint
 from src.training.experimentTracking import logRunDetails, logEpoch, logBestEpoch
 from src.visualization.trainingVisualization import plotMetrics
 
-def trainModel(configuration, device, learningRate, trial = None):
+logger = getLogger(__name__)
+
+def trainModel(configuration: Configuration, device: str, learningRate: float, trial: Trial | None = None) -> tuple[dict[str, Any], str]:
     # Every training run starts from the same seed, so that trials differ only in their hyperparameters,
     # and any single trial can be reproduced on its own.
     setSeed(configuration.seed, configuration.training.deterministic)
@@ -47,7 +53,7 @@ def trainModel(configuration, device, learningRate, trial = None):
         if device == 'cuda':
             mlflow.log_metric('peakMemoryGiB', max_memory_allocated() / 2**30)
         status = 'FINISHED'
-        print(f'Run {run.info.run_id} finished.')
+        logger.info(f'Run {run.info.run_id} finished.')
         return validationMetrics, run.info.run_id
     except TrialPruned:
         status = 'KILLED'

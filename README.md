@@ -19,9 +19,9 @@ Each step is a subcommand of the `biofouling` command line, configured by `confi
 - `src/configuration.py`: Layered configuration and its validation.
 - `src/data/`: Conversion of the Labelbox export into masks, split of the dataset, data loading and augmentation, and extraction of video frames.
 - `src/models/`: Attention U-Net, its attention mechanisms, and the baseline networks.
-- `src/training/`: Training loop, loss, metrics, learning rate tuning, experiment tracking and export of the model.
-- `src/evaluation/`: Evaluation of the exported model on the testing subset.
-- `src/visualization/`: Masks, training curves, dataset statistics and network graph.
+- `src/training/`: Training loop, loss, learning rate tuning, experiment tracking and export of the model.
+- `src/evaluation/`: Metrics, and evaluation of the exported model on the testing subset.
+- `src/visualization/`: Masks, training curves, dataset statistics and network summary.
 - `Application/`: Windows application, which applies an exported model to a folder of images.
 - `.env.example`: Template of the Labelbox API key.
 
