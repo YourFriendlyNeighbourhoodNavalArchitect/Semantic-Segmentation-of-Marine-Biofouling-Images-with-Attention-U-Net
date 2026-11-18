@@ -1,15 +1,8 @@
-using System;
-using System.Drawing;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Collections.Generic;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using OpenCvSharp;
+using OpenCvSharp.Dnn;
 
 namespace Production
 {
@@ -17,14 +10,17 @@ namespace Production
     {
         private readonly ProgressBar progressBar;
         private readonly ToolStripStatusLabel statusLabel;
-        private OpenCvSharp.Size imageResolution;
-        private Vec3b[] classColors = [];
         private CancellationTokenSource? cancellationTokenSource;
 
         private static readonly Color ButtonDefaultColor = Color.FromArgb(192, 192, 255);
         private static readonly Color ButtonCancelColor = Color.Red;
         private const string ButtonTextStart = "Initiate Predictions";
         private const string ButtonTextCancel = "Cancel";
+        private const string ErrorLogName = "errors.log";
+        private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"
+        };
 
         public GUI()
         {
@@ -48,61 +44,15 @@ namespace Production
             this.Controls.Add(progressBar);
         }
 
-        private enum ProcessingState
+        private void SetProcessing(bool processing)
         {
-            Ready,
-            Processing,
-            Cancelled
+            StartPredictionButton.Text = processing ? ButtonTextCancel : ButtonTextStart;
+            StartPredictionButton.BackColor = processing ? ButtonCancelColor : ButtonDefaultColor;
+            SelectInputFolderButton.Enabled = SelectOutputFolderButton.Enabled = SelectModelButton.Enabled = !processing;
         }
 
-        private void UpdateProcessingState(ProcessingState state, string message = "")
+        private static void ShowError(string message)
         {
-            if (InvokeRequired)
-            {
-                Invoke(() => UpdateProcessingState(state, message));
-                return;
-            }
-
-            switch (state)
-            {
-                case ProcessingState.Ready:
-                    StartPredictionButton.Text = ButtonTextStart;
-                    StartPredictionButton.BackColor = ButtonDefaultColor;
-                    statusLabel.Text = "Ready";
-                    progressBar.Value = 0;
-                    break;
-
-                case ProcessingState.Processing:
-                    StartPredictionButton.Text = ButtonTextCancel;
-                    StartPredictionButton.BackColor = ButtonCancelColor;
-                    statusLabel.Text = "Processing...";
-                    break;
-
-                case ProcessingState.Cancelled:
-                    StartPredictionButton.Text = ButtonTextStart;
-                    StartPredictionButton.BackColor = ButtonDefaultColor;
-                    statusLabel.Text = "Operation cancelled";
-                    break;
-            }
-        }
-
-        private void UpdateProgress(int progress)
-        {
-            if (InvokeRequired)
-            {
-                Invoke(() => UpdateProgress(progress));
-                return;
-            }
-            progressBar.Value = Math.Min(100, Math.Max(0, progress));
-        }
-
-        private void ShowError(string message)
-        {
-            if (InvokeRequired)
-            {
-                Invoke(() => ShowError(message));
-                return;
-            }
             MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
@@ -138,9 +88,9 @@ namespace Production
 
         private async void StartPredictionButton_Click(object sender, EventArgs e)
         {
-            if (StartPredictionButton.Text == ButtonTextCancel)
+            if (cancellationTokenSource != null)
             {
-                cancellationTokenSource?.Cancel();
+                cancellationTokenSource.Cancel();
                 return;
             }
 
@@ -149,75 +99,95 @@ namespace Production
                 return;
             }
 
-            using (cancellationTokenSource = new CancellationTokenSource())
+            using CancellationTokenSource cts = cancellationTokenSource = new();
+            // Progress<T> reports on the UI thread, where it was created.
+            Progress<int> progress = new(value => progressBar.Value = value);
+            progressBar.Value = 0;
+            statusLabel.Text = "Processing...";
+            SetProcessing(true);
+            try
             {
-                try
+                var (total, errors) = await Task.Run(() => PredictMasks(modelPath, inputFolder, outputFolder, progress, cts.Token));
+                statusLabel.Text = errors.Count == 0 ? "Completed" : $"Completed with {errors.Count} errors";
+                string summary = $"Masks saved for {total - errors.Count} of {total} images.";
+                if (errors.Count > 0)
                 {
-                    UpdateProcessingState(ProcessingState.Processing);
-                    await Task.Run(() => PredictMasks(modelPath, inputFolder, outputFolder, cancellationTokenSource.Token));
-                    MessageBox.Show("Predictions complete! Masks saved.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    summary += $"\n{errors.Count} images failed, see {ErrorLogName} in the output folder.";
                 }
-                catch (OperationCanceledException)
-                {
-                    UpdateProcessingState(ProcessingState.Cancelled);
-                    MessageBox.Show("Process cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                catch (Exception ex)
-                {
-                    ShowError($"Processing error: {ex.Message}");
-                }
-                finally
-                {
-                    UpdateProcessingState(ProcessingState.Ready);
-                }
+                MessageBox.Show(summary, "Predictions complete", MessageBoxButtons.OK,
+                                errors.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            }
+            catch (OperationCanceledException)
+            {
+                statusLabel.Text = "Cancelled";
+            }
+            catch (Exception ex)
+            {
+                statusLabel.Text = "Failed";
+                ShowError($"Processing error: {ex.Message}");
+            }
+            finally
+            {
+                cancellationTokenSource = null;
+                SetProcessing(false);
             }
         }
 
-        private void PredictMasks(string modelPath, string inputFolder, string outputFolder, CancellationToken cancellationToken)
+        private static (int Total, List<string> Errors) PredictMasks(string modelPath, string inputFolder, string outputFolder,
+                                                                     IProgress<int> progress, CancellationToken cancellationToken)
         {
-            using var session = CreateInferenceSession(modelPath);
+            string[] filePaths = Directory.EnumerateFiles(inputFolder)
+                                          .Where(path => ImageExtensions.Contains(Path.GetExtension(path))).ToArray();
+            if (filePaths.Length == 0)
+            {
+                throw new InvalidOperationException("No supported images found in the input folder.");
+            }
+
+            using InferenceSession session = CreateInferenceSession(modelPath);
             // Input resolution is read from the model, of the form (B, C, H, W).
-            int[] inputDimensions = session.InputMetadata.Values.First().Dimensions;
-            imageResolution = new OpenCvSharp.Size(inputDimensions[3], inputDimensions[2]);
-            classColors = ReadClassColors(session);
-            var loadedImages = LoadImages(inputFolder);
-            if (loadedImages.Count == 0)
+            int[] inputDimensions = session.InputMetadata[session.InputNames[0]].Dimensions;
+            OpenCvSharp.Size resolution = new(inputDimensions[3], inputDimensions[2]);
+            using Mat colorTable = ReadColorTable(session);
+
+            // Images are processed one at a time, so that memory use does not grow with the folder.
+            string errorLogPath = Path.Combine(outputFolder, ErrorLogName);
+            File.Delete(errorLogPath);
+            List<string> errors = [];
+            try
             {
-                throw new InvalidOperationException("No valid images found in the input folder.");
-            }
-
-            int totalFiles = loadedImages.Count;
-            int processedFiles = 0;
-
-            foreach (var (filePath, processedImage) in loadedImages)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
+                for (int i = 0; i < filePaths.Length; i++)
                 {
-                    ProcessImage(session, processedImage, filePath, outputFolder);
-                    processedFiles++;
-                    UpdateProgress((int)((processedFiles / (double)totalFiles) * 100));
-                }
-                catch (Exception ex)
-                {
-                    ShowError($"Error processing {Path.GetFileName(filePath)}: {ex.Message}");
-                }
-                finally
-                {
-                    processedImage.Dispose();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        ProcessImage(session, filePaths[i], outputFolder, resolution, colorTable);
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{Path.GetFileName(filePaths[i])}: {ex.Message}");
+                    }
+                    progress.Report((i + 1) * 100 / filePaths.Length);
                 }
             }
+            finally
+            {
+                if (errors.Count > 0)
+                {
+                    File.WriteAllLines(errorLogPath, errors);
+                }
+            }
+
+            return (filePaths.Length, errors);
         }
 
         private static InferenceSession CreateInferenceSession(string modelPath)
         {
-            SessionOptions options = new();
+            using SessionOptions options = new();
             options.AppendExecutionProvider_CPU();
             return new InferenceSession(modelPath, options);
         }
 
-        private static Vec3b[] ReadClassColors(InferenceSession session)
+        private static Mat ReadColorTable(InferenceSession session)
         {
             // Classes and their RGB colours are stored in the model upon export ("biofouling export"), in output order.
             if (!session.ModelMetadata.CustomMetadataMap.TryGetValue("classes", out string? classes))
@@ -225,123 +195,70 @@ namespace Production
                 throw new InvalidOperationException("The model carries no class metadata. Export it again with \"biofouling export\".");
             }
 
+            // Lookup table from class index to colour, in BGR order as OpenCV stores colours. Unknown indices map to black.
             using JsonDocument document = JsonDocument.Parse(classes);
-            // OpenCV stores colours in BGR order.
-            return document.RootElement.EnumerateArray()
-                                       .Select(modelClass => modelClass.GetProperty("color"))
-                                       .Select(color => new Vec3b((byte)color[2].GetInt32(), (byte)color[1].GetInt32(), (byte)color[0].GetInt32()))
-                                       .ToArray();
-        }
-
-        private void ProcessImage(InferenceSession session, Mat processedImage, string filePath, string outputFolder)
-        {
-            var inputTensor = CreateInputTensor(processedImage);
-            using var prediction = RunInference(session, inputTensor);
-            using var RGBMask = ClassIndicesToRGB(prediction);
-            string outputFilePath = Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(filePath) + "_mask.png");
-            Cv2.ImWrite(outputFilePath, RGBMask);
-        }
-
-        private DenseTensor<float> CreateInputTensor(Mat processedImage)
-        {
-            DenseTensor<float> inputTensor = new([1, 3, imageResolution.Height, imageResolution.Width]);
-            for (int y = 0; y < processedImage.Rows; y++)
+            Mat colorTable = new(1, 256, MatType.CV_8UC3, Scalar.All(0));
+            int classIndex = 0;
+            foreach (JsonElement modelClass in document.RootElement.EnumerateArray())
             {
-                for (int x = 0; x < processedImage.Cols; x++)
-                {
-                    Vec3f pixel = processedImage.At<Vec3f>(y, x);
-                    inputTensor[0, 0, y, x] = pixel.Item0;
-                    inputTensor[0, 1, y, x] = pixel.Item1;
-                    inputTensor[0, 2, y, x] = pixel.Item2;
-                }
+                JsonElement color = modelClass.GetProperty("color");
+                colorTable.Set(0, classIndex++, new Vec3b((byte)color[2].GetInt32(), (byte)color[1].GetInt32(), (byte)color[0].GetInt32()));
             }
 
-            return inputTensor;
+            return colorTable;
         }
 
-        private Mat RunInference(InferenceSession session, DenseTensor<float> inputTensor)
+        private static void ProcessImage(InferenceSession session, string filePath, string outputFolder,
+                                         OpenCvSharp.Size resolution, Mat colorTable)
         {
-            string inputName = session.InputMetadata.Keys.First();
-            var namedInput = NamedOnnxValue.CreateFromTensor(inputName, inputTensor);
-            using var results = session.Run([namedInput]);
-            var output = results[0].AsTensor<float>();
-            // Number of classes is read from the model output, of the form (B, C, H, W).
-            int numClasses = output.Dimensions[1];
-            Mat prediction = new(imageResolution.Height, imageResolution.Width, MatType.CV_8UC1);
-            float[] outputArray = [.. output];
-
-            for (int i = 0; i < imageResolution.Height; i++)
+            // Files are read and written through .NET, as OpenCV cannot open non-ASCII paths on Windows.
+            // EXIF orientation is ignored, as by PIL in training.
+            using Mat image = Cv2.ImDecode(File.ReadAllBytes(filePath), ImreadModes.Color | ImreadModes.IgnoreOrientation);
+            if (image.Empty())
             {
-                for (int j = 0; j < imageResolution.Width; j++)
+                throw new InvalidDataException("The image could not be decoded.");
+            }
+
+            // Bilinear resize of the 8-bit image, BGR to RGB, scaling to [0, 1] and (1, 3, H, W) float32 layout, as in training.
+            using Mat blob = CvDnn.BlobFromImage(image, 1.0 / 255, resolution, new Scalar(), swapRB: true, crop: false);
+            using OrtValue input = OrtValue.CreateTensorValueWithData(OrtMemoryInfo.DefaultInstance, TensorElementType.Float,
+                                                                      [1, 3, resolution.Height, resolution.Width], blob.Data,
+                                                                      blob.Total() * sizeof(float));
+            using RunOptions runOptions = new();
+            using var outputs = session.Run(runOptions, session.InputNames, [input], session.OutputNames);
+
+            // Output logits are of the form (B, C, H, W).
+            long[] shape = outputs[0].GetTensorTypeAndShape().Shape;
+            using Mat classIndices = ArgmaxOverClasses(outputs[0].GetTensorDataAsSpan<float>(), (int)shape[1], (int)shape[2], (int)shape[3]);
+            using Mat mask = new();
+            Cv2.CvtColor(classIndices, mask, ColorConversionCodes.GRAY2BGR);
+            Cv2.LUT(mask, colorTable, mask);
+
+            Cv2.ImEncode(".png", mask, out byte[] encodedMask);
+            File.WriteAllBytes(Path.Combine(outputFolder, Path.GetFileName(filePath) + ".mask.png"), encodedMask);
+        }
+
+        private static Mat ArgmaxOverClasses(ReadOnlySpan<float> logits, int classCount, int height, int width)
+        {
+            // Each class occupies a contiguous plane, which is compared with the running maximum over the previous classes.
+            int planeSize = height * width;
+            float[] maxima = logits[..planeSize].ToArray();
+            Mat classIndices = new(height, width, MatType.CV_8UC1, Scalar.All(0));
+            Span<byte> indices = classIndices.AsSpan<byte>();
+            for (int c = 1; c < classCount; c++)
+            {
+                ReadOnlySpan<float> plane = logits.Slice(c * planeSize, planeSize);
+                for (int i = 0; i < planeSize; i++)
                 {
-                    int baseIndex = (i * imageResolution.Width + j);
-                    float[] pixelProbs = new float[numClasses];
-                    for (int c = 0; c < numClasses; c++)
+                    if (plane[i] > maxima[i])
                     {
-                        pixelProbs[c] = outputArray[baseIndex + c * imageResolution.Height * imageResolution.Width];
+                        maxima[i] = plane[i];
+                        indices[i] = (byte)c;
                     }
-                    prediction.Set(i, j, (byte)Array.IndexOf(pixelProbs, pixelProbs.Max()));
                 }
             }
 
-            return prediction;
-        }
-
-        private List<(string FilePath, Mat Image)> LoadImages(string inputFolder)
-        {
-            List<(string FilePath, Mat Image)> loadedImages = [];
-            HashSet<string> allowedExtensions = new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".png" };
-            var inputFiles = Directory.EnumerateFiles(inputFolder)
-                                      .Where(file => allowedExtensions.Contains(Path.GetExtension(file))).ToArray();
-
-            foreach (string filePath in inputFiles)
-            {
-                try
-                {
-                    using Mat originalImage = Cv2.ImRead(filePath);
-                    if (originalImage.Empty())
-                    {
-                        ShowError($"Image '{Path.GetFileName(filePath)}' is empty.");
-                        continue;
-                    }
-
-                    using Mat resizedImage = new();
-                    Cv2.Resize(originalImage, resizedImage, imageResolution, 0, 0, InterpolationFlags.Linear);
-                    using Mat RGBImage = new();
-                    Cv2.CvtColor(resizedImage, RGBImage, ColorConversionCodes.BGR2RGB);
-                    Mat processedImage = new();
-                    RGBImage.ConvertTo(processedImage, MatType.CV_32FC3, 1.0 / 255.0);
-                    loadedImages.Add((filePath, processedImage));
-                }
-                catch (Exception ex)
-                {
-                    ShowError($"Error loading '{Path.GetFileName(filePath)}': {ex.Message}");
-                }
-            }
-
-            return loadedImages;
-        }
-
-        private Mat ClassIndicesToRGB(Mat prediction)
-        {
-            if (prediction.Type() != MatType.CV_8UC1)
-            {
-                prediction.ConvertTo(prediction, MatType.CV_8UC1);
-            }
-
-            Mat RGBMask = new(prediction.Rows, prediction.Cols, MatType.CV_8UC3, new Scalar(0, 0, 0));
-            for (int y = 0; y < prediction.Rows; y++)
-            {
-                for (int x = 0; x < prediction.Cols; x++)
-                {
-                    byte classIndex = prediction.At<byte>(y, x);
-                    Vec3b color = (classIndex < classColors.Length) ?
-                        classColors[classIndex] : new Vec3b(0, 0, 0);
-                    RGBMask.Set(y, x, color);
-                }
-            }
-
-            return RGBMask;
+            return classIndices;
         }
 
         private bool ValidateInputs(out string inputFolder, out string outputFolder, out string modelPath)
