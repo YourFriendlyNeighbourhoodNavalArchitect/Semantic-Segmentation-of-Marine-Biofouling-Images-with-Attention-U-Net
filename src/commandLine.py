@@ -1,41 +1,41 @@
 from argparse import ArgumentParser
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from biofouling.configuration import PROJECT_ROOT, loadConfiguration
+from src.configuration import PROJECT_ROOT, loadConfiguration
 
 # Modules are imported within each command, so that light commands do not load PyTorch or MLflow.
 
 def convertLabels(configuration, arguments):
     from os import getenv
     from dotenv import load_dotenv
-    from biofouling.data.Labelbox import Labelbox
+    from src.data.Labelbox import Labelbox
     # The Labelbox API key is read from .env (see .env.example).
     load_dotenv(PROJECT_ROOT / '.env')
     Labelbox(configuration.paths.labels, configuration.paths.masks, configuration.paths.metadata, getenv('LABELBOX_API_KEY')).saveMasks()
 
 def extractFrames(configuration, arguments):
-    from biofouling.data.videoToFrames import videoToFrames
+    from src.data.videoToFrames import videoToFrames
     videoToFrames(arguments.video, arguments.output or configuration.paths.videos, arguments.frameRate)
 
 def splitDataset(configuration, arguments):
-    from biofouling.data.SubsetSplit import SubsetSplit
+    from src.data.SubsetSplit import SubsetSplit
     SubsetSplit(configuration.paths.metadata, configuration.splitPath, configuration.split.strategy, configuration.split.ratios,
                 configuration.seed).splitDataset()
 
 def viewDataset(configuration, arguments):
-    from biofouling.visualization.DatasetVisualizer import DatasetVisualizer
+    from src.visualization.DatasetVisualizer import DatasetVisualizer
     DatasetVisualizer(configuration)
 
 def plotGraphs(configuration, arguments):
-    from biofouling.visualization.PublicationGraphs import PublicationGraphs
+    from src.visualization.PublicationGraphs import PublicationGraphs
     PublicationGraphs(configuration.paths.metadata, configuration.paths.visualizations, configuration.classDictionaries,
                       configuration.classRemap).generateGraphs()
 
 def train(configuration, arguments):
-    from biofouling.training.experimentTracking import startTracking, setExperiment
-    from biofouling.training.trainingInitialization import setupDevice
-    from biofouling.training.trainModel import trainModel
-    from biofouling.training.exportONNX import exportRun
+    from src.training.experimentTracking import startTracking, setExperiment
+    from src.training.trainingInitialization import setupDevice
+    from src.training.trainModel import trainModel
+    from src.training.exportONNX import exportRun
     startTracking(configuration)
     setExperiment(configuration)
     device = setupDevice()
@@ -44,10 +44,10 @@ def train(configuration, arguments):
 
 def tune(configuration, arguments):
     from mlflow import MlflowClient
-    from biofouling.training.experimentTracking import startTracking, setExperiment
-    from biofouling.training.trainingInitialization import setupDevice
-    from biofouling.training.tuneModel import tuneModel
-    from biofouling.training.exportONNX import exportRun
+    from src.training.experimentTracking import startTracking, setExperiment
+    from src.training.trainingInitialization import setupDevice
+    from src.training.tuneModel import tuneModel
+    from src.training.exportONNX import exportRun
     startTracking(configuration)
     setExperiment(configuration)
     device = setupDevice()
@@ -59,16 +59,16 @@ def tune(configuration, arguments):
         exportRun(bestRunID, device)
 
 def export(configuration, arguments):
-    from biofouling.training.experimentTracking import startTracking
-    from biofouling.training.trainingInitialization import setupDevice
-    from biofouling.training.exportONNX import exportRun
+    from src.training.experimentTracking import startTracking
+    from src.training.trainingInitialization import setupDevice
+    from src.training.exportONNX import exportRun
     startTracking(configuration)
     exportRun(arguments.run, setupDevice())
 
 def test(configuration, arguments):
     from mlflow.artifacts import download_artifacts
-    from biofouling.training.experimentTracking import startTracking, logTestResults
-    from biofouling.evaluation.ModelTester import ModelTester
+    from src.training.experimentTracking import startTracking, logTestResults
+    from src.evaluation.ModelTester import ModelTester
     startTracking(configuration)
     # The model is loaded into memory, so a downloaded copy is not needed afterwards.
     with TemporaryDirectory() as directory:
@@ -79,14 +79,14 @@ def test(configuration, arguments):
         logTestResults(tester.runID, metrics, tester.classNames, summaryPaths)
 
 def summarizeModel(configuration, arguments):
-    from biofouling.visualization.visualizeModel import visualizeModel
+    from src.visualization.visualizeModel import visualizeModel
     visualizeModel(configuration.model.architecture, configuration.numClasses, configuration.model.resolution, configuration.paths.visualizations)
 
 def main():
     common = ArgumentParser(add_help = False)
     common.add_argument('--config', action = 'append', type = Path, default = [], metavar = 'FILE',
                         help = 'Configuration file layered over configs/default.toml. Repeatable; later files take precedence.')
-    parser = ArgumentParser(prog = 'biofouling', description = 'Semantic segmentation of marine biofouling with an Attention U-Net.')
+    parser = ArgumentParser(prog = 'biofouling', description = 'Semantic Segmentation of Marine Biofouling with an Attention U-Net.')
     commands = parser.add_subparsers(dest = 'command', required = True, metavar = 'command')
 
     commands.add_parser('labels', parents = [common], help = 'Convert the Labelbox export into masks and metadata.').set_defaults(function = convertLabels)

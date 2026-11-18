@@ -1,5 +1,5 @@
 from torch import save, load
-from biofouling.models.modelFactory import initializeModel
+from src.models.modelFactory import initializeModel
 
 def saveCheckpoint(path, model, architecture, classes, resolution, epoch, splitStrategy, splitHash):
     # PyTorch checkpoint of the best epoch, for later export or fine-tuning.

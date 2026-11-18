@@ -1,5 +1,6 @@
 import numpy as np
 from json import dumps
+from logging import getLogger, ERROR
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from onnx import load, save
@@ -9,7 +10,10 @@ from torch.export import Dim
 from onnxruntime import InferenceSession
 from mlflow import MlflowClient
 from mlflow.artifacts import download_artifacts
-from biofouling.training.checkpoints import loadCheckpoint
+from src.training.checkpoints import loadCheckpoint
+
+# The exporter warns that the operators of torchvision, which the project does not use, cannot be registered.
+getLogger('torch.onnx._internal.exporter._registration').setLevel(ERROR)
 
 def saveONNX(model, device, resolution, path, metadata):
     # ONNX offers framework interoperability and shared optimization [https://en.wikipedia.org/wiki/Open_Neural_Network_Exchange].

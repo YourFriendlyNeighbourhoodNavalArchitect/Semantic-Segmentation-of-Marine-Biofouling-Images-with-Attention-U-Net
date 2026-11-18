@@ -1,4 +1,4 @@
-"""Semantic segmentation of marine biofouling with an Attention U-Net."""
+"""Semantic Segmentation of Marine Biofouling with an Attention U-Net."""
 from os import environ
 
 # MLflow prints a hint for coding agents upon import, which only clutters the output. The package is imported before any

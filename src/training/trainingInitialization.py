@@ -7,7 +7,7 @@ from torch.cuda import is_available
 from torch import optim
 from torch.utils.data import DataLoader, get_worker_info
 from torch.optim.lr_scheduler import ReduceLROnPlateau, LambdaLR
-from biofouling.data.SegmentationDataset import SegmentationDataset
+from src.data.SegmentationDataset import SegmentationDataset
 
 def seedWorker(workerID):
     # Each data loading worker receives its own seed, derived from the global seed, so that augmentations are reproducible.

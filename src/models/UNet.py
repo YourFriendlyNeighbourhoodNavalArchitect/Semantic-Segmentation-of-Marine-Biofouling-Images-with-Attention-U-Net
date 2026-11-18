@@ -1,6 +1,6 @@
 from torch import cat
 from torch.nn import Module, Sequential, Conv2d, BatchNorm2d, ReLU, Identity, MaxPool2d, Upsample
-from biofouling.models.attentionMechanisms import ChannelAttention, SpatialAttention
+from src.models.attentionMechanisms import ChannelAttention, SpatialAttention
 
 class BlueArrow(Module):
     # Fundamental component of the original U-Net.

@@ -7,11 +7,11 @@ from torch import from_numpy
 from torch.utils.data import DataLoader
 from matplotlib.pyplot import subplots, close
 from onnxruntime import InferenceSession
-from biofouling.annotationClasses import classRemap
-from biofouling.data.SegmentationDataset import SegmentationDataset
-from biofouling.data.SubsetSplit import loadSplit
-from biofouling.training.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
-from biofouling.visualization.maskVisualization import calculateClassCoverage, classIndicesToRGB, generateLegend
+from src.annotationClasses import classRemap
+from src.data.SegmentationDataset import SegmentationDataset
+from src.data.SubsetSplit import loadSplit
+from src.training.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
+from src.visualization.maskVisualization import calculateClassCoverage, classIndicesToRGB, generateLegend
 
 # Images per inference call. Batching helps the CPU modestly, without the memory demands of larger batches.
 BATCH_SIZE = 4

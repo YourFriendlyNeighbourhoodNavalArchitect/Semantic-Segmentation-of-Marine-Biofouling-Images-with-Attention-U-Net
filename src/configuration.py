@@ -1,10 +1,10 @@
 from dataclasses import dataclass, fields
 from pathlib import Path
 from tomllib import load
-from biofouling.annotationClasses import classRemap
+from src.annotationClasses import classRemap
 
-# The project is installed in editable mode (uv sync), so the package lives in src/biofouling of the project.
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# The project is installed in editable mode (uv sync), so the project root is the parent of src.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIGURATION = PROJECT_ROOT / 'configs' / 'default.toml'
 SPLIT_STRATEGIES = ('stratified', 'grouped')
 

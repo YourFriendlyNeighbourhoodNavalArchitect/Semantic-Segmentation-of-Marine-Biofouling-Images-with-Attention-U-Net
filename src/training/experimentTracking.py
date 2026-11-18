@@ -4,10 +4,10 @@ from importlib.metadata import version
 import mlflow
 from mlflow import MlflowClient
 from mlflow.exceptions import MlflowException
-from biofouling.configuration import PROJECT_ROOT
+from src.configuration import PROJECT_ROOT
 
 # Versions of the packages that determine the numerical results of a run.
-TRACKED_PACKAGES = ('torch', 'torchvision', 'numpy', 'albumentations', 'optuna', 'onnx', 'onnxruntime')
+TRACKED_PACKAGES = ('torch', 'numpy', 'albumentations', 'albucore', 'opencv-python-headless', 'optuna', 'onnx', 'onnxruntime')
 
 def startTracking(configuration):
     # Runs, parameters and metrics are stored in an SQLite database; attached files are stored in a folder next to it.
@@ -16,7 +16,7 @@ def startTracking(configuration):
 
 def experimentName(configuration):
     # Runs are grouped by everything that makes their results incomparable.
-    return f'{configuration.model.architecture}, {configuration.numClasses} classes, {configuration.split.strategy} split'
+    return f'{configuration.model.architecture}, {configuration.numClasses} Classes, {configuration.split.strategy.capitalize()} Split'
 
 def setExperiment(configuration):
     name = experimentName(configuration)

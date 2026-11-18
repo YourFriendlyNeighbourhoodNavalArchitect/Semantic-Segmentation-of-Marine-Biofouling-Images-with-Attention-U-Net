@@ -5,7 +5,7 @@ from requests.exceptions import RequestException
 from time import sleep
 from os.path import splitext
 from PIL import Image
-from biofouling.annotationClasses import ANNOTATION_CLASSES
+from src.annotationClasses import ANNOTATION_CLASSES
 
 # Placeholder of pixels not yet covered by any annotation, while a mask is being assembled.
 UNANNOTATED = 255

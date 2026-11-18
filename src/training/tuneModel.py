@@ -7,9 +7,9 @@ from optuna.trial import TrialState
 from optuna.samplers import RandomSampler
 from optuna.pruners import MedianPruner
 from mlflow import MlflowClient
-from biofouling.training.trainModel import trainModel
-from biofouling.training.experimentTracking import experimentName
-from biofouling.visualization.trainingVisualization import plotStudy
+from src.training.trainModel import trainModel
+from src.training.experimentTracking import experimentName
+from src.visualization.trainingVisualization import plotStudy
 
 def studyConfiguration(configuration):
     # Settings that a resumed study must share with the study it continues. The tuned grid itself may be extended.

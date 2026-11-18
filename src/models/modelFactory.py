@@ -1,7 +1,7 @@
 from torch.nn import Conv2d, BatchNorm2d
 from torch.nn.init import kaiming_normal_, constant_
-from biofouling.models.UNet import UNet
-from biofouling.models.SimpleCNN import SimpleCNN
+from src.models.UNet import UNet
+from src.models.SimpleCNN import SimpleCNN
 
 # Attention mechanisms can be removed one at a time, to evaluate their contribution.
 ARCHITECTURES = {'Attention U-Net': lambda inChannels, numClasses: UNet(inChannels, numClasses, spatialAttention = True, channelAttention = True),

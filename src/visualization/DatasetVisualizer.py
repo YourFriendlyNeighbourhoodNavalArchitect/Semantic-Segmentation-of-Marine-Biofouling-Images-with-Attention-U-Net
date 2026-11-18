@@ -1,7 +1,7 @@
 from json import load
 from matplotlib.pyplot import subplots, draw, show
-from biofouling.data.SegmentationDataset import SegmentationDataset
-from biofouling.visualization.maskVisualization import calculateClassCoverage, classIndicesToRGB, generateLegend
+from src.data.SegmentationDataset import SegmentationDataset
+from src.visualization.maskVisualization import calculateClassCoverage, classIndicesToRGB, generateLegend
 
 class DatasetVisualizer:
     def __init__(self, configuration):

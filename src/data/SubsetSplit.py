@@ -2,7 +2,7 @@ import numpy as np
 from hashlib import sha256
 from json import load, loads, dump
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
-from biofouling.annotationClasses import ANNOTATION_CLASSES
+from src.annotationClasses import ANNOTATION_CLASSES
 
 SUBSETS = ('training', 'validation', 'testing')
 

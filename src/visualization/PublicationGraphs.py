@@ -1,7 +1,7 @@
 import numpy as np
 from json import load
 from matplotlib.pyplot import subplots, savefig, close
-from seaborn import heatmap
+from matplotlib.colors import Normalize
 from textwrap import TextWrapper
 
 class PublicationGraphs:
@@ -70,9 +70,16 @@ class PublicationGraphs:
         # Plot heatmap using precomputed normalized correlation matrix.
         classLabels = ['\n'.join(self.wrapper.wrap(self.classNames[index])) for index in range(self.numClasses)]
         figure, axes = subplots(figsize = (14, 12))
-        heatmap(self.correlationMatrix, annot = True, fmt = '.2f', cmap = 'coolwarm',
-                xticklabels = classLabels, yticklabels = classLabels, ax = axes)
-        axes.set_yticklabels(classLabels, rotation = 0, va = 'center')
+        image = axes.imshow(self.correlationMatrix, cmap = 'coolwarm', norm = Normalize(0, 1))
+        for i in range(self.numClasses):
+            for j in range(self.numClasses):
+                # Annotations contrast with the luminance of their cell.
+                red, green, blue, _ = image.cmap(image.norm(self.correlationMatrix[i, j]))
+                color = 'black' if 0.299 * red + 0.587 * green + 0.114 * blue > 0.5 else 'white'
+                axes.text(j, i, f'{self.correlationMatrix[i, j]:.2f}', ha = 'center', va = 'center', fontsize = 12, color = color)
+        axes.set_xticks(range(self.numClasses), classLabels)
+        axes.set_yticks(range(self.numClasses), classLabels, va = 'center')
+        figure.colorbar(image, ax = axes, fraction = 0.046, pad = 0.04)
         axes.set_title('Class Correlation Matrix', fontsize = 16, fontweight = 'bold')
         axes.tick_params(axis = 'x', labelsize = 12)
         axes.tick_params(axis = 'y', labelsize = 12)

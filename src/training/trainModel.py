@@ -3,21 +3,21 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from torch.cuda import max_memory_allocated
 from optuna.exceptions import TrialPruned
-from biofouling.data.SubsetSplit import loadSplit
-from biofouling.models.modelFactory import initializeModel
-from biofouling.training.LossFunction import LossFunction
-from biofouling.training.trainingInitialization import getDataloaders, getOptimizer, setSeed
-from biofouling.training.trainingLoop import trainingLoop
-from biofouling.training.checkpoints import saveCheckpoint
-from biofouling.training.experimentTracking import logRunDetails, logEpoch, logBestEpoch
-from biofouling.visualization.trainingVisualization import plotMetrics
+from src.data.SubsetSplit import loadSplit
+from src.models.modelFactory import initializeModel
+from src.training.LossFunction import LossFunction
+from src.training.trainingInitialization import getDataloaders, getOptimizer, setSeed
+from src.training.trainingLoop import trainingLoop
+from src.training.checkpoints import saveCheckpoint
+from src.training.experimentTracking import logRunDetails, logEpoch, logBestEpoch
+from src.visualization.trainingVisualization import plotMetrics
 
 def trainModel(configuration, device, learningRate, trial = None):
     # Every training run starts from the same seed, so that trials differ only in their hyperparameters,
     # and any single trial can be reproduced on its own.
     setSeed(configuration.seed, configuration.training.deterministic)
     split, splitHash = loadSplit(configuration.splitPath)
-    runName = f'Learning rate {learningRate:g}' if trial is None else f'Trial {trial.number}, learning rate {learningRate:g}'
+    runName = f'Learning Rate {learningRate:g}' if trial is None else f'Trial {trial.number}, Learning Rate {learningRate:g}'
     # The run is ended explicitly, so that a pruned trial is recorded as such, rather than as a failure.
     run = mlflow.start_run(run_name = runName, nested = trial is not None)
     status = 'FAILED'

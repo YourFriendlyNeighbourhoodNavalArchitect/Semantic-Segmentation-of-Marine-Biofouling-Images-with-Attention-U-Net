@@ -3,7 +3,6 @@ import albumentations as A
 from torch import from_numpy, float32
 from PIL import Image
 from torch.utils.data import Dataset
-from torchvision.transforms.v2 import Compose, ToImage, ToDtype
 
 class SegmentationDataset(Dataset):
     def __init__(self, imageFolder, maskFolder, IDs, resolution, classRemap, augmentationFlag, seed):
@@ -35,8 +34,6 @@ class SegmentationDataset(Dataset):
         else:
             self.transformCompose = A.Compose([A.Resize(resolution[0], resolution[1])], seed = seed)
 
-        self.toTensor = Compose([ToImage(), ToDtype(float32, scale = True)])
-
     def __len__(self):
         return len(self.dataset)
 
@@ -49,6 +46,7 @@ class SegmentationDataset(Dataset):
         transformedImage = result['image']
         transformedMask = result['mask']
 
-        imageTensor = self.toTensor(transformedImage)
+        # Channels first, scaled to [0, 1] by multiplication with 1/255, as in the Windows application.
+        imageTensor = from_numpy(transformedImage).permute(2, 0, 1).contiguous().to(float32).mul_(1 / 255)
         maskTensor = from_numpy(transformedMask).long()
         return imageTensor, maskTensor

@@ -1,49 +1,41 @@
 [project]
 name = "semantic-segmentation-of-marine-biofouling-using-deep-learning"
 version = "1.0.0"
-description = "Semantic segmentation of marine biofouling with an Attention U-Net."
+description = "Semantic Segmentation of Marine Biofouling with an Attention U-Net"
 readme = "README.md"
-license = { file = "LICENSE.md" }
+license = "MIT"
+license-files = ["LICENSE.md"]
 authors = [{ name = "Ioannis Karlatiras" }, { name = "Orfeas Bourchas" }]
 requires-python = ">=3.13"
 keywords = ["Semantic Segmentation", "Marine Biofouling", "U-Net", "Attention U-Net"]
-# Compatible ranges of the direct dependencies. Exact versions of every package are pinned in uv.lock.
-# On Linux, PyTorch from PyPI bundles CUDA 13. On Windows and macOS it is the CPU build, which suffices for testing and export.
 dependencies = [
     "torch>=2.15,<3",
-    "torchvision>=0.29,<1",
     "numpy>=2.5,<3",
-    # Last release under the MIT license. Its successor, AlbumentationsX, is licensed under AGPL-3.0.
     "albumentations>=2.0.8,<3",
+    "opencv-python-headless>=5,<6",
+    "pillow>=13,<14",
     "iterative-stratification>=0.1.9,<0.2",
     "optuna>=5.1,<6",
     "mlflow>=3.18,<4",
     "onnx>=1.23,<2",
     "onnxscript>=0.7.2,<0.8",
-    # CPU build only. Evaluation runs on the same execution provider as the Windows application.
     "onnxruntime>=1.32,<2",
     "matplotlib>=3.11,<4",
-    "seaborn>=0.13.2,<0.14",
-    "pillow>=13,<14",
     "tqdm>=4.70,<5",
     "requests>=2.34,<3",
     "python-dotenv>=1.2,<2",
-    "opencv-python-headless>=5,<6",
 ]
 
 [project.optional-dependencies]
-# Network summary and computational graph (biofouling summary). The graph also requires Graphviz.
-visualization = ["torchinfo>=1.8,<2", "torchviz>=0.0.3"]
+visualization = ["torchinfo>=1.8,<2", "torchviz>=0.0.3,<0.1"]
 
 [project.scripts]
-biofouling = "biofouling.commandLine:main"
-
-[dependency-groups]
-dev = ["ruff>=0.17"]
+biofouling = "src.commandLine:main"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "biofouling"
+module-name = "src"
+module-root = ""

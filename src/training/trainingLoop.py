@@ -3,8 +3,8 @@ from tqdm import tqdm
 from torch import no_grad, autocast
 from torch.amp import GradScaler
 from optuna.exceptions import TrialPruned
-from biofouling.training.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
-from biofouling.visualization.trainingVisualization import logResults
+from src.training.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
+from src.visualization.trainingVisualization import logResults
 
 def trainOneEpoch(model, trainingDataloader, optimizer, scaler, criterion, numClasses, device):
     model.train()
