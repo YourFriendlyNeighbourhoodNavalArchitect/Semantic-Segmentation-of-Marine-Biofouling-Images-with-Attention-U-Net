@@ -7,9 +7,6 @@ using Size = OpenCvSharp.Size;
 
 namespace BiofoulingSegmentation;
 
-/// <summary>
-/// Segmentation model exported by "biofouling export", which predicts a colour mask for an image.
-/// </summary>
 internal sealed class Segmenter : IDisposable
 {
     private readonly InferenceSession session;

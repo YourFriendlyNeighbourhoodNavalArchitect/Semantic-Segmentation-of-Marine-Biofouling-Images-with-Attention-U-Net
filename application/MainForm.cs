@@ -1,18 +1,7 @@
-using OpenCvSharp;
-
 namespace BiofoulingSegmentation;
 
-/// <summary>
-/// Window that applies a segmentation model to every image of a folder, and saves the predicted masks to another folder.
-/// </summary>
 public partial class MainForm : Form
 {
-    private const string ErrorLogName = "errors.log";
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"
-    };
-
     // The start button doubles as the cancel button while processing; its designer appearance is restored afterwards.
     private readonly string startText;
     private readonly Color startColor;
@@ -70,15 +59,16 @@ public partial class MainForm : Form
         SetProcessing(true);
         try
         {
-            var (total, errors) = await Task.Run(() => PredictFolder(modelPath, inputFolder, outputFolder, progress, cts.Token));
-            statusLabel.Text = errors.Count == 0 ? "Completed" : $"Completed with {errors.Count} errors";
-            string summary = $"Masks saved for {total - errors.Count} of {total} images.";
-            if (errors.Count > 0)
+            FolderPrediction result = await Task.Run(() => FolderPredictor.Run(modelPath, inputFolder, outputFolder, progress, cts.Token));
+            int failed = result.Errors.Count;
+            statusLabel.Text = failed == 0 ? "Completed" : $"Completed with {failed} errors";
+            string summary = $"Masks saved for {result.Total - failed} of {result.Total} images.";
+            if (failed > 0)
             {
-                summary += $"\n{errors.Count} images failed, see {ErrorLogName} in the output folder.";
+                summary += $"\n{failed} images failed, see {FolderPredictor.ErrorLogName} in the output folder.";
             }
             MessageBox.Show(summary, "Predictions complete", MessageBoxButtons.OK,
-                            errors.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                            failed == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
         catch (OperationCanceledException)
         {
@@ -105,59 +95,4 @@ public partial class MainForm : Form
 
     private static void ShowError(string message) =>
         MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-    private static (int Total, List<string> Errors) PredictFolder(string modelPath, string inputFolder, string outputFolder,
-                                                                  IProgress<int> progress, CancellationToken cancellationToken)
-    {
-        // Images are processed one at a time, so that memory use does not grow with the folder.
-        string[] imagePaths = Directory.EnumerateFiles(inputFolder).Where(path => ImageExtensions.Contains(Path.GetExtension(path))).ToArray();
-        Directory.CreateDirectory(outputFolder);
-        using Segmenter segmenter = new(modelPath);
-
-        string errorLogPath = Path.Combine(outputFolder, ErrorLogName);
-        File.Delete(errorLogPath);
-        List<string> errors = [];
-        try
-        {
-            for (int i = 0; i < imagePaths.Length; i++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    SaveMask(segmenter, imagePaths[i], outputFolder);
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"{Path.GetFileName(imagePaths[i])}: {ex.Message}");
-                }
-                progress.Report((i + 1) * 100 / imagePaths.Length);
-            }
-        }
-        finally
-        {
-            // Errors are logged even if processing is cancelled.
-            if (errors.Count > 0)
-            {
-                File.WriteAllLines(errorLogPath, errors);
-            }
-        }
-
-        return (imagePaths.Length, errors);
-    }
-
-    private static void SaveMask(Segmenter segmenter, string imagePath, string outputFolder)
-    {
-        // Files are read and written through .NET, as OpenCV cannot open non-ASCII paths on Windows.
-        // EXIF orientation is ignored, as by PIL in training.
-        using Mat image = Cv2.ImDecode(File.ReadAllBytes(imagePath), ImreadModes.Color | ImreadModes.IgnoreOrientation);
-        if (image.Empty())
-        {
-            throw new InvalidDataException("The image could not be decoded.");
-        }
-
-        using Mat mask = segmenter.Predict(image);
-        Cv2.ImEncode(".png", mask, out byte[] encodedMask);
-        // The extension is kept in the name, so that images that differ only in their extension do not overwrite each other.
-        File.WriteAllBytes(Path.Combine(outputFolder, Path.GetFileName(imagePath) + ".mask.png"), encodedMask);
-    }
 }
