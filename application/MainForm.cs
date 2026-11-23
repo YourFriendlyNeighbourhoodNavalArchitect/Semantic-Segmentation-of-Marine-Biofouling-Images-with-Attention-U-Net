@@ -2,7 +2,6 @@ namespace BiofoulingSegmentation;
 
 public partial class MainForm : Form
 {
-    // The start button doubles as the cancel button while processing; its designer appearance is restored afterwards.
     private readonly string startText;
     private readonly Color startColor;
     private CancellationTokenSource? cancellation;
@@ -52,7 +51,6 @@ public partial class MainForm : Form
         }
 
         using CancellationTokenSource cts = cancellation = new();
-        // Progress<T> reports on the UI thread, where it is created.
         Progress<int> progress = new(value => progressBar.Value = value);
         progressBar.Value = 0;
         statusLabel.Text = "Processing...";
