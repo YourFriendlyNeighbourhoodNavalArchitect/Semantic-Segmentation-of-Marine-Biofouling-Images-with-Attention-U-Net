@@ -23,9 +23,29 @@ internal sealed class Segmenter : IDisposable
     }
 
     /// <summary>
-    /// Predicts the class of every pixel of a BGR image, and returns the classes as a BGR colour mask at the model resolution.
+    /// Predicts the class of every pixel of an image, and saves the classes as a PNG colour mask at the model resolution.
     /// </summary>
-    public Mat Predict(Mat image)
+    public void SaveMask(string imagePath, string maskPath)
+    {
+        // Files are read and written through .NET, as OpenCV cannot open non-ASCII paths on Windows.
+        using Mat image = Cv2.ImDecode(File.ReadAllBytes(imagePath), ImreadModes.Color | ImreadModes.IgnoreOrientation);
+        if (image.Empty())
+        {
+            throw new InvalidDataException("The image could not be decoded.");
+        }
+
+        using Mat mask = Predict(image);
+        Cv2.ImEncode(".png", mask, out byte[] encodedMask);
+        File.WriteAllBytes(maskPath, encodedMask);
+    }
+
+    public void Dispose()
+    {
+        session.Dispose();
+        colorTable.Dispose();
+    }
+
+    private Mat Predict(Mat image)
     {
         // Bilinear resize of the 8-bit image, BGR to RGB, scaling to [0, 1] and (1, 3, H, W) float32 layout, as in training.
         using Mat blob = CvDnn.BlobFromImage(image, 1.0 / 255, inputSize, new Scalar(), swapRB: true, crop: false);
@@ -42,12 +62,6 @@ internal sealed class Segmenter : IDisposable
         Cv2.CvtColor(classIndices, mask, ColorConversionCodes.GRAY2BGR);
         Cv2.LUT(mask, colorTable, mask);
         return mask;
-    }
-
-    public void Dispose()
-    {
-        session.Dispose();
-        colorTable.Dispose();
     }
 
     private static Mat ReadColorTable(Dictionary<string, string> metadata)
