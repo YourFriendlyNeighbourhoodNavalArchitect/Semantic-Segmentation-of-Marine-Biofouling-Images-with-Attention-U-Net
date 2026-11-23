@@ -16,22 +16,18 @@ internal sealed class Segmenter : IDisposable
     public Segmenter(string modelPath)
     {
         session = new InferenceSession(modelPath);
-        // Input of the form (B, C, H, W); the batch dimension is dynamic, the resolution fixed.
+        // Input image of the form (B, C, H, W).
         int[] inputDimensions = session.InputMetadata[session.InputNames[0]].Dimensions;
         inputSize = new Size(inputDimensions[3], inputDimensions[2]);
         colorTable = ReadColorTable(session.ModelMetadata.CustomMetadataMap);
     }
 
-    /// <summary>
-    /// Predicts the class of every pixel of an image, and saves the classes as a PNG colour mask at the model resolution.
-    /// </summary>
     public void SaveMask(string imagePath, string maskPath)
     {
-        // Files are read and written through .NET, as OpenCV cannot open non-ASCII paths on Windows.
         using Mat image = Cv2.ImDecode(File.ReadAllBytes(imagePath), ImreadModes.Color | ImreadModes.IgnoreOrientation);
         if (image.Empty())
         {
-            throw new InvalidDataException("The image could not be decoded.");
+            throw new InvalidDataException("Failed to decode the image.");
         }
 
         using Mat mask = Predict(image);
@@ -47,7 +43,6 @@ internal sealed class Segmenter : IDisposable
 
     private Mat Predict(Mat image)
     {
-        // Bilinear resize of the 8-bit image, BGR to RGB, scaling to [0, 1] and (1, 3, H, W) float32 layout, as in training.
         using Mat blob = CvDnn.BlobFromImage(image, 1.0 / 255, inputSize, new Scalar(), swapRB: true, crop: false);
         using OrtValue input = OrtValue.CreateTensorValueWithData(OrtMemoryInfo.DefaultInstance, TensorElementType.Float,
                                                                   [1, 3, inputSize.Height, inputSize.Width], blob.Data,
@@ -66,13 +61,11 @@ internal sealed class Segmenter : IDisposable
 
     private static Mat ReadColorTable(Dictionary<string, string> metadata)
     {
-        // Classes and their RGB colours are stored in the model upon export, in output order.
         if (!metadata.TryGetValue("classes", out string? classes))
         {
-            throw new InvalidOperationException("The model carries no class metadata. Export it again with \"biofouling export\".");
+            throw new InvalidOperationException("No model metadata available.");
         }
 
-        // Lookup table from class index to colour, in BGR order as OpenCV stores colours.
         using JsonDocument document = JsonDocument.Parse(classes);
         Mat colorTable = new(1, 256, MatType.CV_8UC3, Scalar.All(0));
         int classIndex = 0;
@@ -87,7 +80,6 @@ internal sealed class Segmenter : IDisposable
 
     private static Mat ArgmaxOverClasses(ReadOnlySpan<float> logits, int classCount, int height, int width)
     {
-        // Each class occupies a contiguous plane, which is compared with the running maximum over the previous classes.
         int planeSize = height * width;
         float[] maxima = logits[..planeSize].ToArray();
         Mat classIndices = new(height, width, MatType.CV_8UC1, Scalar.All(0));
