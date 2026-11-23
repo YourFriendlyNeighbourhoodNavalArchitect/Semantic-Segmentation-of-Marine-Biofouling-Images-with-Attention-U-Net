@@ -14,7 +14,6 @@ Each step is a subcommand of the `biofouling` command line, configured by `confi
 
 - `configs/default.toml`: Every setting, including the classes of the network and the annotation classes each one absorbs.
 - `configs/annotationClasses.toml`: The five annotation classes, instead of the four merged classes.
-- `configs/similarityAwareSplit.toml`: Split that keeps similar images, such as frames of the same video, in the same subset.
 - `biofouling/commandLine.py`: The `biofouling` command line.
 - `biofouling/configuration.py`: Layered configuration and its validation.
 - `biofouling/data/`: Conversion of the Labelbox export into masks, split of the dataset, data loading and augmentation, and extraction of video frames.

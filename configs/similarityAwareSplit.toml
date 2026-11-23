@@ -1,4 +1,0 @@
-# Pass this file to both biofouling split and biofouling train, since the split manifest is named after the strategy.
-
-[split]
-strategy = "similarity-aware"
