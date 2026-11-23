@@ -1,5 +1,3 @@
-# Files passed with --config are layered over this one. Tables merge key by key; arrays, [[classes]] included, are replaced whole.
-
 seed = 42
 
 [paths]
@@ -7,11 +5,13 @@ data = "data"
 outputs = "outputs"
 
 [split]
-strategy = "stratified" # or "similarity-aware"
+# 'stratified' or 'similarity-aware'
+strategy = "stratified"
 ratios = [0.8, 0.1, 0.1]
 
 [model]
-architecture = "Attention U-Net" # or "U-Net", "Simple CNN"
+# 'Attention U-Net' or 'U-Net' or 'Simple CNN'
+architecture = "Attention U-Net"
 resolution = [512, 512]
 
 [training]
@@ -22,16 +22,14 @@ warmup = 10
 patience = 50
 plateauPatience = 10
 plateauFactor = 0.5
-learningRate = 4.1e-4 # best trial of the Marine 2025 study
-monitor = "IoU" # drives early stopping, learning rate decay, checkpointing and tuning
+learningRate = 4.1e-4
+monitor = "IoU"
 monitorMode = "max"
 deterministic = false
 
 [tuning]
 learningRates = [1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3]
 
-# Network classes, in output order (Marine 2025). Each absorbs the annotation classes listed under "annotations";
-# every annotation class must be absorbed exactly once.
 [[classes]]
 name = "Clean Hull"
 color = [0, 255, 0]
