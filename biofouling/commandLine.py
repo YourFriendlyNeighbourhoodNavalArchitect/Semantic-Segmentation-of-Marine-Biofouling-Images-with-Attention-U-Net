@@ -2,7 +2,7 @@ from argparse import ArgumentParser, Namespace
 from logging import Formatter, LogRecord, StreamHandler, getLogger, INFO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from src.configuration import PROJECT_ROOT, Configuration, loadConfiguration
+from biofouling.configuration import PROJECT_ROOT, Configuration, loadConfiguration
 
 # Modules are imported within each command, so that light commands do not load PyTorch or MLflow.
 
@@ -18,7 +18,7 @@ def configureLogging() -> None:
     # Only the messages of the project are shown. Libraries keep their own settings, and report warnings only.
     handler = StreamHandler()
     handler.setFormatter(ConsoleFormatter('%(message)s'))
-    projectLogger = getLogger('src')
+    projectLogger = getLogger('biofouling')
     projectLogger.addHandler(handler)
     projectLogger.setLevel(INFO)
     projectLogger.propagate = False
@@ -26,34 +26,34 @@ def configureLogging() -> None:
 def convertLabels(configuration: Configuration, arguments: Namespace) -> None:
     from os import getenv
     from dotenv import load_dotenv
-    from src.data.Labelbox import Labelbox
+    from biofouling.data.Labelbox import Labelbox
     # The Labelbox API key is read from .env (see .env.example).
     load_dotenv(PROJECT_ROOT / '.env')
     Labelbox(configuration.paths.labels, configuration.paths.masks, configuration.paths.metadata, getenv('LABELBOX_API_KEY')).saveMasks()
 
 def extractFrames(configuration: Configuration, arguments: Namespace) -> None:
-    from src.data.videoToFrames import videoToFrames
+    from biofouling.data.videoToFrames import videoToFrames
     videoToFrames(arguments.video, arguments.output or configuration.paths.videos, arguments.interval)
 
 def splitDataset(configuration: Configuration, arguments: Namespace) -> None:
-    from src.data.SubsetSplit import SubsetSplit
+    from biofouling.data.SubsetSplit import SubsetSplit
     SubsetSplit(configuration.paths.metadata, configuration.splitPath, configuration.split.strategy, configuration.split.ratios,
                 configuration.seed).splitDataset()
 
 def viewDataset(configuration: Configuration, arguments: Namespace) -> None:
-    from src.visualization.DatasetVisualizer import DatasetVisualizer
+    from biofouling.visualization.DatasetVisualizer import DatasetVisualizer
     DatasetVisualizer(configuration).run()
 
 def plotGraphs(configuration: Configuration, arguments: Namespace) -> None:
-    from src.visualization.PublicationGraphs import PublicationGraphs
+    from biofouling.visualization.PublicationGraphs import PublicationGraphs
     PublicationGraphs(configuration.paths.metadata, configuration.paths.visualizations, configuration.classDictionaries,
                       configuration.classRemap).generateGraphs()
 
 def train(configuration: Configuration, arguments: Namespace) -> None:
-    from src.training.experimentTracking import startTracking, setExperiment
-    from src.training.trainingInitialization import setupDevice
-    from src.training.trainModel import trainModel
-    from src.training.exportONNX import exportRun
+    from biofouling.training.experimentTracking import startTracking, setExperiment
+    from biofouling.training.trainingInitialization import setupDevice
+    from biofouling.training.trainModel import trainModel
+    from biofouling.training.exportONNX import exportRun
     startTracking(configuration)
     setExperiment(configuration)
     device = setupDevice()
@@ -62,10 +62,10 @@ def train(configuration: Configuration, arguments: Namespace) -> None:
 
 def tune(configuration: Configuration, arguments: Namespace) -> None:
     from mlflow import MlflowClient
-    from src.training.experimentTracking import startTracking, setExperiment
-    from src.training.trainingInitialization import setupDevice
-    from src.training.tuneModel import tuneModel
-    from src.training.exportONNX import exportRun
+    from biofouling.training.experimentTracking import startTracking, setExperiment
+    from biofouling.training.trainingInitialization import setupDevice
+    from biofouling.training.tuneModel import tuneModel
+    from biofouling.training.exportONNX import exportRun
     startTracking(configuration)
     setExperiment(configuration)
     device = setupDevice()
@@ -77,15 +77,15 @@ def tune(configuration: Configuration, arguments: Namespace) -> None:
         exportRun(bestRunID)
 
 def export(configuration: Configuration, arguments: Namespace) -> None:
-    from src.training.experimentTracking import startTracking
-    from src.training.exportONNX import exportRun
+    from biofouling.training.experimentTracking import startTracking
+    from biofouling.training.exportONNX import exportRun
     startTracking(configuration)
     exportRun(arguments.run)
 
 def test(configuration: Configuration, arguments: Namespace) -> None:
     from mlflow.artifacts import download_artifacts
-    from src.training.experimentTracking import startTracking, logTestResults
-    from src.evaluation.ModelTester import ModelTester
+    from biofouling.training.experimentTracking import startTracking, logTestResults
+    from biofouling.evaluation.ModelTester import ModelTester
     startTracking(configuration)
     # The model is loaded into memory, so a downloaded copy is not needed afterwards.
     with TemporaryDirectory() as directory:
@@ -96,7 +96,7 @@ def test(configuration: Configuration, arguments: Namespace) -> None:
         logTestResults(tester.runID, metrics, tester.classNames, summaryPaths)
 
 def summarizeModel(configuration: Configuration, arguments: Namespace) -> None:
-    from src.visualization.visualizeModel import visualizeModel
+    from biofouling.visualization.visualizeModel import visualizeModel
     visualizeModel(configuration.model.architecture, configuration.numClasses, configuration.model.resolution)
 
 def main() -> None:

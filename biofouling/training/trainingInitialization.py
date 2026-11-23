@@ -10,8 +10,8 @@ from torch import optim
 from torch.nn import Parameter
 from torch.utils.data import DataLoader, get_worker_info
 from torch.optim.lr_scheduler import ReduceLROnPlateau, LambdaLR
-from src.configuration import Configuration, Training
-from src.data.SegmentationDataset import SegmentationDataset
+from biofouling.configuration import Configuration, Training
+from biofouling.data.SegmentationDataset import SegmentationDataset
 
 logger = getLogger(__name__)
 

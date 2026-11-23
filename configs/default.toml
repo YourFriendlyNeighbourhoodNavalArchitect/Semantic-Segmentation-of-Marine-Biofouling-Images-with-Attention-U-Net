@@ -1,24 +1,17 @@
-# Default configuration. Further files are layered over it, the last one taking precedence, e.g.
-#   biofouling train --config configs/annotationClasses.toml
-# Tables are merged key by key. Arrays, including the classes below, are replaced as a whole.
+# Files passed with --config are layered over this one. Tables merge key by key; arrays, [[classes]] included, are replaced whole.
 
 seed = 42
 
 [paths]
-# Relative to the project root.
 data = "data"
 outputs = "outputs"
 
 [split]
-# "stratified": images are assigned one by one, stratified with respect to the classes they contain.
-# "grouped": images that are listed as similar in their "Similarity" property are kept in the same subset.
-strategy = "stratified"
+strategy = "stratified" # or "similarity-aware"
 ratios = [0.8, 0.1, 0.1]
 
 [model]
-# "Attention U-Net" (spatial and channel attention), "Spatial Attention U-Net" (spatial attention only),
-# "U-Net" (no attention) or "Simple CNN" (no skip connections, baseline).
-architecture = "Attention U-Net"
+architecture = "Attention U-Net" # or "U-Net", "Simple CNN"
 resolution = [512, 512]
 
 [training]
@@ -29,21 +22,16 @@ warmup = 10
 patience = 50
 plateauPatience = 10
 plateauFactor = 0.5
-# Learning rate of the best trial of the Marine 2025 study.
-learningRate = 4.1e-4
-# Validation metric that drives early stopping, learning rate decay, checkpointing and hyperparameter tuning.
-monitor = "IoU"
+learningRate = 4.1e-4 # best trial of the Marine 2025 study
+monitor = "IoU" # drives early stopping, learning rate decay, checkpointing and tuning
 monitorMode = "max"
-# Deterministic algorithms ensure exact reproducibility, at the expense of training speed.
 deterministic = false
 
 [tuning]
-# Learning rates evaluated by biofouling tune, one training run each.
 learningRates = [1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3]
 
-# Classes predicted by the network, in output order (Marine 2025).
-# Each one absorbs the annotation classes listed under "annotations". Every annotation class must appear exactly once.
-# Stored masks keep the original annotation classes; they are mapped to these classes upon loading.
+# Network classes, in output order (Marine 2025). Each absorbs the annotation classes listed under "annotations";
+# every annotation class must be absorbed exactly once.
 [[classes]]
 name = "Clean Hull"
 color = [0, 255, 0]

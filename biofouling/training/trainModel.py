@@ -6,15 +6,15 @@ from typing import Any
 from torch.cuda import max_memory_allocated
 from optuna import Trial
 from optuna.exceptions import TrialPruned
-from src.configuration import Configuration
-from src.data.SubsetSplit import loadSplit
-from src.models.modelFactory import initializeModel
-from src.training.LossFunction import LossFunction
-from src.training.trainingInitialization import getDataloaders, getOptimizer, setSeed
-from src.training.trainingLoop import trainingLoop
-from src.training.checkpoints import saveCheckpoint
-from src.training.experimentTracking import logRunDetails, logEpoch, logBestEpoch
-from src.visualization.trainingVisualization import plotMetrics
+from biofouling.configuration import Configuration
+from biofouling.data.SubsetSplit import loadSplit
+from biofouling.models.modelFactory import initializeModel
+from biofouling.training.LossFunction import LossFunction
+from biofouling.training.trainingInitialization import getDataloaders, getOptimizer, setSeed
+from biofouling.training.trainingLoop import trainingLoop
+from biofouling.training.checkpoints import saveCheckpoint
+from biofouling.training.experimentTracking import logRunDetails, logEpoch, logBestEpoch
+from biofouling.visualization.trainingVisualization import plotMetrics
 
 logger = getLogger(__name__)
 

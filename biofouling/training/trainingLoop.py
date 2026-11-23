@@ -11,9 +11,9 @@ from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from optuna import Trial
 from optuna.exceptions import TrialPruned
-from src.configuration import Training
-from src.evaluation.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
-from src.visualization.trainingVisualization import logResults
+from biofouling.configuration import Training
+from biofouling.evaluation.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
+from biofouling.visualization.trainingVisualization import logResults
 
 logger = getLogger(__name__)
 

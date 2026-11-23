@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from torch.nn import Module
-from src.models.modelFactory import initializeModel
+from biofouling.models.modelFactory import initializeModel
 
 def saveCheckpoint(path: Path, model: Module, architecture: str, classes: list[dict[str, Any]], resolution: Sequence[int], epoch: int,
                    splitStrategy: str, splitHash: str) -> Path:

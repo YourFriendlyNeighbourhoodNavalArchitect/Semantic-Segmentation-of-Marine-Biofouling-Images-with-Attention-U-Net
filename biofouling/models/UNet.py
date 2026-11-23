@@ -1,11 +1,11 @@
 from torch import Tensor, cat
 from torch.nn import Module, Sequential, Conv2d, BatchNorm2d, ReLU, Identity, MaxPool2d, Upsample
-from src.models.attentionMechanisms import ChannelAttention, AttentionGate
+from biofouling.models.attentionMechanisms import ChannelAttention, AttentionGate
 
 class BlueArrow(Module):
     # Fundamental component of the original U-Net.
     # Refer to [https://arxiv.org/pdf/1505.04597].
-    def __init__(self, inChannels: int, outChannels: int, channelAttention: bool = True):
+    def __init__(self, inChannels: int, outChannels: int, attention: bool = True):
         super().__init__()
         # Convolutions followed by batch normalization carry no bias, which the normalization would cancel.
         self.convolutionOperation = Sequential(Conv2d(inChannels, outChannels, kernel_size = 3, padding = 1, bias = False),
@@ -18,16 +18,16 @@ class BlueArrow(Module):
                                                BatchNorm2d(outChannels),
                                                ReLU(inplace = True),
                                                # Channel attention recalibrates the features of the block.
-                                               ChannelAttention(outChannels) if channelAttention else Identity())
+                                               ChannelAttention(outChannels) if attention else Identity())
 
     def forward(self, x: Tensor) -> Tensor:
         return self.convolutionOperation(x)
 
 class DownSample(Module):
     # Building block of the contractive path of the network.
-    def __init__(self, inChannels: int, outChannels: int, channelAttention: bool = True):
+    def __init__(self, inChannels: int, outChannels: int, attention: bool = True):
         super().__init__()
-        self.convolution = BlueArrow(inChannels, outChannels, channelAttention)
+        self.convolution = BlueArrow(inChannels, outChannels, attention)
         self.redArrow = MaxPool2d(kernel_size = 2, stride = 2)
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
@@ -37,7 +37,7 @@ class DownSample(Module):
 
 class UpSample(Module):
     # Building block of the expansive path of the network.
-    def __init__(self, inChannels: int, outChannels: int, spatialAttention: bool = True, channelAttention: bool = True):
+    def __init__(self, inChannels: int, outChannels: int, attention: bool = True):
         super().__init__()
         # Modern decoder architectures use upsampling blocks, instead of transpose convolutions.
         self.greenArrow = Sequential(Upsample(scale_factor = 2, mode = 'bilinear', align_corners = False),
@@ -48,8 +48,8 @@ class UpSample(Module):
         # Intermediate channels are chosen for computational efficiency and dimensionality reduction.
         # Without it, skip connections pass the encoder features unaltered, as in the original U-Net.
         self.attentionGate = AttentionGate(encoderChannels = inChannels // 2, gatingChannels = inChannels,
-                                           intermediateChannels = inChannels // 4) if spatialAttention else None
-        self.convolution = BlueArrow(inChannels, outChannels, channelAttention)
+                                           intermediateChannels = inChannels // 4) if attention else None
+        self.convolution = BlueArrow(inChannels, outChannels, attention)
 
     def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
         if self.attentionGate is not None:
@@ -63,22 +63,22 @@ class UNet(Module):
     # Network output is of the form (B, C, H, W).
     # Spatial attention gates the skip connections [https://arxiv.org/pdf/1804.03999].
     # Channel attention recalibrates every convolution block [https://arxiv.org/abs/1709.01507v4].
-    # Without either, the network reduces to the original U-Net, which serves as a baseline.
-    def __init__(self, inChannels: int, numClasses: int, spatialAttention: bool = True, channelAttention: bool = True):
+    # Without attention, the network reduces to the original U-Net, which serves as a baseline.
+    def __init__(self, inChannels: int, numClasses: int, attention: bool = True):
         super().__init__()
         self.numClasses = numClasses
 
-        self.downConvolutionOne = DownSample(inChannels, 64, channelAttention)
-        self.downConvolutionTwo = DownSample(64, 128, channelAttention)
-        self.downConvolutionThree = DownSample(128, 256, channelAttention)
-        self.downConvolutionFour = DownSample(256, 512, channelAttention)
+        self.downConvolutionOne = DownSample(inChannels, 64, attention)
+        self.downConvolutionTwo = DownSample(64, 128, attention)
+        self.downConvolutionThree = DownSample(128, 256, attention)
+        self.downConvolutionFour = DownSample(256, 512, attention)
 
-        self.bottleneck = BlueArrow(512, 1024, channelAttention)
+        self.bottleneck = BlueArrow(512, 1024, attention)
 
-        self.upConvolutionOne = UpSample(1024, 512, spatialAttention, channelAttention)
-        self.upConvolutionTwo = UpSample(512, 256, spatialAttention, channelAttention)
-        self.upConvolutionThree = UpSample(256, 128, spatialAttention, channelAttention)
-        self.upConvolutionFour = UpSample(128, 64, spatialAttention, channelAttention)
+        self.upConvolutionOne = UpSample(1024, 512, attention)
+        self.upConvolutionTwo = UpSample(512, 256, attention)
+        self.upConvolutionThree = UpSample(256, 128, attention)
+        self.upConvolutionFour = UpSample(128, 64, attention)
 
         self.output = Conv2d(64, numClasses, kernel_size = 1)
 

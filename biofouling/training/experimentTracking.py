@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from mlflow import MlflowClient
 from mlflow.exceptions import MlflowException
-from src.configuration import PROJECT_ROOT, Configuration
+from biofouling.configuration import PROJECT_ROOT, Configuration
 
 logger = getLogger(__name__)
 

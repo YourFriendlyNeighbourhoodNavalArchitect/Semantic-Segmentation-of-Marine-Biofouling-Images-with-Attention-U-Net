@@ -5,7 +5,7 @@ from hashlib import sha256
 from logging import getLogger
 from pathlib import Path
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
-from src.annotationClasses import ANNOTATION_CLASSES
+from biofouling.annotationClasses import ANNOTATION_CLASSES
 
 logger = getLogger(__name__)
 
@@ -74,7 +74,7 @@ class SubsetSplit:
 
     def formGroups(self) -> list[list[str]]:
         # Stratified strategy: every image forms a group of its own.
-        if self.strategy == 'grouped':
+        if self.strategy == 'similarity-aware':
             return self.groupBySimilarity()
         return [[ID] for ID in self.metadata]
 
@@ -87,7 +87,7 @@ class SubsetSplit:
 
     def assignToSubsets(self) -> tuple[set[str], set[str], set[str]]:
         # Assign images to the appropriate subsets, such that:
-        # 1) Similar images are placed together (grouped strategy).
+        # 1) Similar images are placed together (similarity-aware strategy).
         # 2) Subsets are stratified with respect to class distributions.
         # 3) Split ratios are approximately maintained.
         groups = self.formGroups()

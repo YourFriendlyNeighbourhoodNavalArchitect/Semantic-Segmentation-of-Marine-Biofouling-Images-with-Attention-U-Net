@@ -2,9 +2,9 @@ import json
 from logging import getLogger
 from matplotlib.backend_bases import KeyEvent
 from matplotlib.pyplot import subplots, show
-from src.configuration import Configuration
-from src.data.SegmentationDataset import SegmentationDataset
-from src.visualization.maskVisualization import calculateClassCoverage, classIndicesToRGB, generateLegend
+from biofouling.configuration import Configuration
+from biofouling.data.SegmentationDataset import SegmentationDataset
+from biofouling.visualization.maskVisualization import calculateClassCoverage, classIndicesToRGB, generateLegend
 
 logger = getLogger(__name__)
 

@@ -11,7 +11,7 @@ from torch.nn import Module
 from onnxruntime import InferenceSession
 from mlflow import MlflowClient
 from mlflow.artifacts import download_artifacts
-from src.training.checkpoints import loadCheckpoint
+from biofouling.training.checkpoints import loadCheckpoint
 
 logger = getLogger(__name__)
 # The exporter warns that the operators of torchvision, which the project does not use, cannot be registered.

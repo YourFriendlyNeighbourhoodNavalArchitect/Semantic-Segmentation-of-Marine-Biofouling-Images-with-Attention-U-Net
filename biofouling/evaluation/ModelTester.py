@@ -9,12 +9,12 @@ from torch import Tensor, from_numpy
 from torch.utils.data import DataLoader
 from matplotlib.pyplot import subplots, close
 from onnxruntime import InferenceSession
-from src.annotationClasses import classRemap
-from src.configuration import Configuration
-from src.data.SegmentationDataset import SegmentationDataset
-from src.data.SubsetSplit import loadSplit
-from src.evaluation.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
-from src.visualization.maskVisualization import calculateClassCoverage, classIndicesToRGB, generateLegend
+from biofouling.annotationClasses import classRemap
+from biofouling.configuration import Configuration
+from biofouling.data.SegmentationDataset import SegmentationDataset
+from biofouling.data.SubsetSplit import loadSplit
+from biofouling.evaluation.computeMetrics import initializeConfusionMatrix, updateConfusionMatrix, computeMetrics
+from biofouling.visualization.maskVisualization import calculateClassCoverage, classIndicesToRGB, generateLegend
 
 logger = getLogger(__name__)
 

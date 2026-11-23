@@ -14,14 +14,14 @@ Each step is a subcommand of the `biofouling` command line, configured by `confi
 
 - `configs/default.toml`: Every setting, including the classes of the network and the annotation classes each one absorbs.
 - `configs/annotationClasses.toml`: The five annotation classes, instead of the four merged classes.
-- `configs/groupedSplit.toml`: Split that keeps similar images, such as frames of the same video, in the same subset.
-- `src/commandLine.py`: The `biofouling` command line.
-- `src/configuration.py`: Layered configuration and its validation.
-- `src/data/`: Conversion of the Labelbox export into masks, split of the dataset, data loading and augmentation, and extraction of video frames.
-- `src/models/`: Attention U-Net, its attention mechanisms, and the baseline networks.
-- `src/training/`: Training loop, loss, learning rate tuning, experiment tracking and export of the model.
-- `src/evaluation/`: Metrics, and evaluation of the exported model on the testing subset.
-- `src/visualization/`: Masks, training curves, dataset statistics and network summary.
+- `configs/similarityAwareSplit.toml`: Split that keeps similar images, such as frames of the same video, in the same subset.
+- `biofouling/commandLine.py`: The `biofouling` command line.
+- `biofouling/configuration.py`: Layered configuration and its validation.
+- `biofouling/data/`: Conversion of the Labelbox export into masks, split of the dataset, data loading and augmentation, and extraction of video frames.
+- `biofouling/models/`: Attention U-Net, its attention mechanisms, and the baseline networks.
+- `biofouling/training/`: Training loop, loss, learning rate tuning, experiment tracking and export of the model.
+- `biofouling/evaluation/`: Metrics, and evaluation of the exported model on the testing subset.
+- `biofouling/visualization/`: Masks, training curves, dataset statistics and network summary.
 - `application/`: Windows application, which applies an exported model to a folder of images.
 - `.env.example`: Template of the Labelbox API key.
 

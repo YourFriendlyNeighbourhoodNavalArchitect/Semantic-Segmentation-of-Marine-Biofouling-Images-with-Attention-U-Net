@@ -3,13 +3,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
-from src.annotationClasses import classRemap
-from src.models.architectures import DOWNSAMPLING_FACTORS
+from biofouling.annotationClasses import classRemap
+from biofouling.models.architectures import DOWNSAMPLING_FACTORS
 
-# The project is installed in editable mode (uv sync), so the project root is the parent of src.
+# The project is installed in editable mode (uv sync), so the project root is the parent of the package.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIGURATION = PROJECT_ROOT / 'configs' / 'default.toml'
-SPLIT_STRATEGIES = ('stratified', 'grouped')
+SPLIT_STRATEGIES = ('stratified', 'similarity-aware')
 MONITORED_METRICS = ('Loss', 'Dice Coefficient', 'IoU', 'Pixel Accuracy', 'Precision', 'Recall')
 
 @dataclass(frozen = True)

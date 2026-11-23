@@ -9,10 +9,10 @@ from optuna.trial import FrozenTrial, Trial, TrialState
 from optuna.samplers import RandomSampler
 from optuna.pruners import MedianPruner
 from mlflow import MlflowClient
-from src.configuration import Configuration
-from src.training.trainModel import trainModel
-from src.training.experimentTracking import experimentName, flattenTables
-from src.visualization.trainingVisualization import plotStudy
+from biofouling.configuration import Configuration
+from biofouling.training.trainModel import trainModel
+from biofouling.training.experimentTracking import experimentName, flattenTables
+from biofouling.visualization.trainingVisualization import plotStudy
 
 logger = getLogger(__name__)
 

@@ -8,7 +8,7 @@ from typing import Any
 from PIL import Image
 from requests import Session
 from requests.exceptions import RequestException
-from src.annotationClasses import ANNOTATION_CLASSES
+from biofouling.annotationClasses import ANNOTATION_CLASSES
 
 logger = getLogger(__name__)
 

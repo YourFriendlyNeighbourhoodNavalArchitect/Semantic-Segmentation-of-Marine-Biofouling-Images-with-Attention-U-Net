@@ -1,3 +1,3 @@
-from src.commandLine import main
+from biofouling.commandLine import main
 
 main()
