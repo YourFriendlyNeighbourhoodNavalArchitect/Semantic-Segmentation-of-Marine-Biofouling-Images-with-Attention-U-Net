@@ -1,4 +1,4 @@
-# Semantic Segmentation of Marine Biofouling using Deep Learning
+# Semantic Segmentation of Marine Biofouling Images with Attention U-Net
 
 This repository contains a semantic segmentation model for marine biofouling on ship hulls, written in Python with PyTorch. It labels every pixel of an underwater image of a hull as clean hull, soft fouling, hard fouling or background, using an Attention U-Net.
 

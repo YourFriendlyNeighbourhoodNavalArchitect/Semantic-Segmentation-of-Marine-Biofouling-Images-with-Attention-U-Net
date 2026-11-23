@@ -2666,7 +2666,7 @@ wheels = [
 ]
 
 [[package]]
-name = "semantic-segmentation-of-marine-biofouling-using-deep-learning"
+name = "semantic-segmentation-of-marine-biofouling-images-with-attention-u-net"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [

@@ -1,7 +1,7 @@
 [project]
-name = "semantic-segmentation-of-marine-biofouling-using-deep-learning"
+name = "semantic-segmentation-of-marine-biofouling-images-with-attention-u-net"
 version = "1.0.0"
-description = "Semantic Segmentation of Marine Biofouling with an Attention U-Net"
+description = "Semantic Segmentation of Marine Biofouling Images with Attention U-Net"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE.md"]
@@ -28,12 +28,12 @@ dependencies = [
 ]
 
 [project.scripts]
-biofouling = "src.commandLine:main"
+biofouling = "biofouling.commandLine:main"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "src"
+module-name = "biofouling"
 module-root = ""
