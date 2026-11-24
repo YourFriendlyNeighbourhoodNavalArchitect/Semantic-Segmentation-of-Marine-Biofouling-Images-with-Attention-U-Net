@@ -7,6 +7,8 @@ using Size = OpenCvSharp.Size;
 
 namespace BiofoulingSegmentation;
 
+internal sealed class SegmentationException(string message) : Exception(message);
+
 internal sealed class Segmenter : IDisposable
 {
     private readonly InferenceSession session;
@@ -15,11 +17,20 @@ internal sealed class Segmenter : IDisposable
 
     public Segmenter(string modelPath)
     {
-        session = new InferenceSession(modelPath);
-        // Input image of the form (B, C, H, W).
-        int[] inputDimensions = session.InputMetadata[session.InputNames[0]].Dimensions;
-        inputSize = new Size(inputDimensions[3], inputDimensions[2]);
-        colorTable = ReadColorTable(session.ModelMetadata.CustomMetadataMap);
+        try
+        {
+            session = new InferenceSession(modelPath);
+            // Input image and output logits of the form (B, C, H, W).
+            int[] inputDimensions = session.InputMetadata[session.InputNames[0]].Dimensions;
+            inputSize = new Size(inputDimensions[3], inputDimensions[2]);
+            int classCount = session.OutputMetadata[session.OutputNames[0]].Dimensions[1];
+            colorTable = ReadColorTable(session.ModelMetadata.CustomMetadataMap, classCount);
+        }
+        catch (Exception)
+        {
+            session?.Dispose();
+            throw new SegmentationException("Failed to load the model.");
+        }
     }
 
     public void SaveMask(string imagePath, string maskPath)
@@ -59,20 +70,21 @@ internal sealed class Segmenter : IDisposable
         return mask;
     }
 
-    private static Mat ReadColorTable(Dictionary<string, string> metadata)
+    private static Mat ReadColorTable(Dictionary<string, string> metadata, int classCount)
     {
-        if (!metadata.TryGetValue("classes", out string? classes))
+        using JsonDocument document = JsonDocument.Parse(metadata["classes"]);
+        Vec3b[] colors = document.RootElement.EnumerateArray().Select(modelClass => modelClass.GetProperty("color"))
+                                 .Select(color => new Vec3b((byte)color[2].GetInt32(), (byte)color[1].GetInt32(), (byte)color[0].GetInt32()))
+                                 .ToArray();
+        if (colors.Length != classCount)
         {
-            throw new InvalidOperationException("No model metadata available.");
+            throw new InvalidDataException();
         }
 
-        using JsonDocument document = JsonDocument.Parse(classes);
         Mat colorTable = new(1, 256, MatType.CV_8UC3, Scalar.All(0));
-        int classIndex = 0;
-        foreach (JsonElement modelClass in document.RootElement.EnumerateArray())
+        for (int i = 0; i < colors.Length; i++)
         {
-            JsonElement color = modelClass.GetProperty("color");
-            colorTable.Set(0, classIndex++, new Vec3b((byte)color[2].GetInt32(), (byte)color[1].GetInt32(), (byte)color[0].GetInt32()));
+            colorTable.Set(0, i, colors[i]);
         }
 
         return colorTable;

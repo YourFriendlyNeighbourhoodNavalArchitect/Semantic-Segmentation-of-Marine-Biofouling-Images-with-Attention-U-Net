@@ -3,18 +3,18 @@ namespace BiofoulingSegmentation;
 public sealed class MainForm : Form
 {
     private const string MaskFolderName = "masks";
-    private const int ListedErrors = 10;
+    private const int ListedFailures = 10;
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"
     };
 
-    private readonly TextBox inputFolderTextBox = new() { Width = 400, Anchor = AnchorStyles.Left | AnchorStyles.Right };
-    private readonly TextBox modelPathTextBox = new() { Width = 400, Anchor = AnchorStyles.Left | AnchorStyles.Right };
-    private readonly ProgressBar progressBar = new() { Anchor = AnchorStyles.Left | AnchorStyles.Right };
+    private readonly TextBox inputFolderTextBox = new() { Width = 400, ReadOnly = true, Anchor = AnchorStyles.Left | AnchorStyles.Right };
+    private readonly TextBox modelPathTextBox = new() { Width = 400, ReadOnly = true, Anchor = AnchorStyles.Left | AnchorStyles.Right };
     private readonly Button selectInputFolderButton = new() { Text = "Select Input Folder", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Right };
     private readonly Button selectModelButton = new() { Text = "Select Model", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Right };
-    private readonly Button startButton = new() { Text = "Start", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Right };
+    private readonly Button startButton = new() { Text = "Start", AutoSize = true, Anchor = AnchorStyles.None, Enabled = false };
+    private readonly ProgressBar progressBar = new() { Height = 6, Anchor = AnchorStyles.Left | AnchorStyles.Right };
     private CancellationTokenSource? cancellation;
 
     public MainForm()
@@ -32,13 +32,19 @@ public sealed class MainForm : Form
         layout.Controls.Add(selectInputFolderButton, 1, 0);
         layout.Controls.Add(modelPathTextBox, 0, 1);
         layout.Controls.Add(selectModelButton, 1, 1);
-        layout.Controls.Add(progressBar, 0, 2);
-        layout.Controls.Add(startButton, 1, 2);
+        layout.Controls.Add(startButton, 0, 2);
+        layout.SetColumnSpan(startButton, 2);
+        layout.Controls.Add(progressBar, 0, 3);
+        layout.SetColumnSpan(progressBar, 2);
         Controls.Add(layout);
 
         selectInputFolderButton.Click += (_, _) => SelectInputFolder();
         selectModelButton.Click += (_, _) => SelectModel();
         startButton.Click += StartButton_Click;
+        EventHandler updateStartButton = (_, _) => startButton.Enabled = inputFolderTextBox.TextLength > 0 && modelPathTextBox.TextLength > 0;
+        inputFolderTextBox.TextChanged += updateStartButton;
+        modelPathTextBox.TextChanged += updateStartButton;
+        FormClosing += (_, e) => e.Cancel = cancellation is not null && e.CloseReason == CloseReason.UserClosing;
     }
 
     private void SelectInputFolder()
@@ -68,43 +74,24 @@ public sealed class MainForm : Form
         }
 
         string inputFolder = inputFolderTextBox.Text, modelPath = modelPathTextBox.Text;
-        if (inputFolder.Length == 0 || modelPath.Length == 0)
-        {
-            ShowError("Select the input folder and the model.");
-            return;
-        }
-
         using CancellationTokenSource cts = cancellation = new();
         Progress<int> progress = new(value => progressBar.Value = value);
-        progressBar.Value = 0;
         SetProcessing(true);
+        (string Text, string Caption, MessageBoxIcon Icon) message;
         try
         {
-            var (total, errors) = await Task.Run(() => SegmentFolder(modelPath, inputFolder, progress, cts.Token));
-            string summary = $"Masks saved for {total - errors.Count} of {total} images in {Path.Combine(inputFolder, MaskFolderName)}.";
-            if (errors.Count > 0)
-            {
-                summary += "\n\nFailed:\n" + string.Join("\n", errors.Take(ListedErrors));
-                if (errors.Count > ListedErrors)
-                {
-                    summary += $"\nand {errors.Count - ListedErrors} more.";
-                }
-            }
-            MessageBox.Show(summary, "Segmentation complete", MessageBoxButtons.OK,
-                            errors.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-        }
-        catch (OperationCanceledException)
-        {
+            var (total, segmented, failed) = await Task.Run(() => SegmentFolder(modelPath, inputFolder, progress, cts.Token));
+            message = Summarize(total, segmented, failed);
         }
         catch (Exception ex)
         {
-            ShowError(ex.Message);
+            message = (ex is SegmentationException ? ex.Message : "Failed to segment the photos.", "Segmentation failed", MessageBoxIcon.Error);
         }
-        finally
-        {
-            cancellation = null;
-            SetProcessing(false);
-        }
+
+        cancellation = null;
+        SetProcessing(false);
+        MessageBox.Show(this, message.Text, message.Caption, MessageBoxButtons.OK, message.Icon);
+        progressBar.Value = 0;
     }
 
     private void SetProcessing(bool processing)
@@ -113,36 +100,57 @@ public sealed class MainForm : Form
         selectInputFolderButton.Enabled = selectModelButton.Enabled = !processing;
     }
 
-    private static void ShowError(string message) =>
-        MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-    private static (int Total, List<string> Errors) SegmentFolder(string modelPath, string inputFolder, IProgress<int> progress,
-                                                                  CancellationToken cancellationToken)
+    private static (string Text, string Caption, MessageBoxIcon Icon) Summarize(int total, int segmented, List<string> failed)
     {
-        string[] imagePaths = Directory.EnumerateFiles(inputFolder).Where(path => ImageExtensions.Contains(Path.GetExtension(path))).ToArray();
-        if (imagePaths.Length == 0)
+        bool cancelled = segmented + failed.Count < total;
+        string text = $"Segmented {segmented}/{total} photos{(cancelled ? " before cancelling" : "")}.";
+        if (failed.Count > 0)
         {
-            throw new InvalidOperationException("Input folder contains no images.");
+            text += $"\n\nFailed to segment {string.Join(", ", failed.Take(ListedFailures))}"
+                  + (failed.Count > ListedFailures ? $" and {failed.Count - ListedFailures} more." : ".");
+        }
+
+        return (text, cancelled ? "Segmentation cancelled" : "Segmentation complete",
+                failed.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
+    private static (int Total, int Segmented, List<string> Failed) SegmentFolder(string modelPath, string inputFolder, IProgress<int> progress,
+                                                                               CancellationToken cancellationToken)
+    {
+        string[] photoPaths = Directory.EnumerateFiles(inputFolder).Where(path => ImageExtensions.Contains(Path.GetExtension(path))).ToArray();
+        if (photoPaths.Length == 0)
+        {
+            throw new SegmentationException("Failed to find any photos in the input folder.");
+        }
+
+        string maskFolder = Path.Combine(inputFolder, MaskFolderName);
+        try
+        {
+            Directory.CreateDirectory(maskFolder);
+        }
+        catch (Exception)
+        {
+            throw new SegmentationException("Failed to access the input folder.");
         }
 
         using Segmenter segmenter = new(modelPath);
-        string maskFolder = Directory.CreateDirectory(Path.Combine(inputFolder, MaskFolderName)).FullName;
-        List<string> errors = [];
-        for (int i = 0; i < imagePaths.Length; i++)
+        int segmented = 0;
+        List<string> failed = [];
+        for (int i = 0; i < photoPaths.Length && !cancellationToken.IsCancellationRequested; i++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            string fileName = Path.GetFileName(imagePaths[i]);
+            string fileName = Path.GetFileName(photoPaths[i]);
             try
             {
-                segmenter.SaveMask(imagePaths[i], Path.Combine(maskFolder, fileName + ".png"));
+                segmenter.SaveMask(photoPaths[i], Path.Combine(maskFolder, fileName + ".png"));
+                segmented++;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                errors.Add($"{fileName}: {ex.Message}");
+                failed.Add(fileName);
             }
-            progress.Report((i + 1) * 100 / imagePaths.Length);
+            progress.Report((i + 1) * 100 / photoPaths.Length);
         }
 
-        return (imagePaths.Length, errors);
+        return (photoPaths.Length, segmented, failed);
     }
 }
